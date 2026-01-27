@@ -1,0 +1,1539 @@
+<script>
+ let allCashslideFormFieldsData = null;
+
+function loadCashslideForm(subType) {
+  const formElement = document.getElementById('cashslideForm');
+  formElement.innerHTML = '';
+
+  const existingFooter = document.querySelector('.sticky-footer');
+  if (existingFooter) existingFooter.remove();
+  if (!subType) return;
+
+  // ▼▼▼ [핵심 수정] 폼 구조 데이터 접근 경로 수정 ▼▼▼
+  if (allCashslideFormFieldsData && allCashslideFormFieldsData.registration) {
+    const fieldInfo = allCashslideFormFieldsData.registration['Cashslide'][subType]; // .registration 추가
+    // ▲▲▲ [핵심 수정] ▲▲▲
+    if (fieldInfo && fieldInfo.fields) {
+      buildCashslideForm('cashslideForm', fieldInfo.fields);
+    } else {
+       // 선택된 subType에 대한 필드 정보가 없을 경우 처리 (예: 정의되지 않은 타입 선택)
+       showMessage(`${subType} 타입에 대한 폼 정의를 찾을 수 없습니다.`, 'error');
+    }
+  } else {
+    // 데이터 로딩 실패 또는 구조 문제 시 메시지 표시
+    showMessage('폼 구조 데이터를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침 해주세요.', 'error');
+  }
+}
+
+function buildCashslideForm(formId, fields) {
+    const form = (typeof formId === 'string') ? document.getElementById(formId) : formId;
+    
+    if (typeof formId === 'string') {
+        form.innerHTML = '';
+    }
+
+    const dependencies = [];
+
+    fields.forEach(field => {
+      const group = document.createElement('div');
+      group.className = 'form-group';
+      const label = document.createElement('label');
+      label.textContent = field.name;
+      if (field.required) label.className = 'required';
+      
+      let element;
+
+      switch (field.type) {
+        case 'textarea':
+          element = document.createElement('textarea');
+                element.rows = field.rows || 3;
+                if (field.placeholder) element.placeholder = field.placeholder;
+                if (field.defaultValue) element.value = field.defaultValue;
+
+                group.appendChild(label); // 라벨 먼저 추가
+                group.appendChild(element); // 텍스트에어리어 추가
+
+                if (field.name === '타이틀') {
+                    // 한 줄당 14자 제한 검사 리스너 추가
+                    element.addEventListener('input', (e) => validateLineLength(e, 14));
+
+                    // 최대 2줄 제한 로직 추가
+                    const lineCounter = document.createElement('div');
+                    lineCounter.className = 'description';
+                    lineCounter.style.textAlign = 'right';
+                    const maxLines = 2; // 최대 2줄
+                    lineCounter.textContent = `0 / ${maxLines} 줄`; 
+
+                    element.addEventListener('input', (e) => {
+                        const lines = e.target.value.split('\n');
+                        let currentLines = lines.length;
+
+                        if (currentLines > maxLines) {
+                            // 2줄 초과 시 입력값 자르기
+                            e.target.value = lines.slice(0, maxLines).join('\n');
+                            currentLines = maxLines; 
+                        }
+                        
+                        lineCounter.textContent = `${currentLines} / ${maxLines} 줄${currentLines >= maxLines ? ' (최대)' : ''}`;
+                    });
+                    group.appendChild(lineCounter); // 줄 수 카운터 추가
+                }
+
+                // '상품정보' 필드에 대한 추가 처리
+                if (field.name === '상품정보') {
+                    // 글자 수 제한 유효성 검사 추가 (기존 로직 유지)
+                    element.addEventListener('input', (e) => validateLineLength(e, 20));
+
+                    // 줄 수 제한 로직 추가
+                    const lineCounter = document.createElement('div');
+                    lineCounter.className = 'description';
+                    lineCounter.style.textAlign = 'right';
+                    lineCounter.textContent = `0 / 5 줄`; // 초기 줄 수 표시
+
+                    element.addEventListener('input', (e) => {
+                        const lines = e.target.value.split('\n');
+                        const maxLines = 5;
+
+                        // 현재 줄 수 업데이트
+                        let currentLines = lines.length;
+
+                        if (currentLines > maxLines) {
+                            // 5줄 초과 시 입력값 자르기
+                            e.target.value = lines.slice(0, maxLines).join('\n');
+                            currentLines = maxLines; // 줄 수를 5로 고정
+                            // (선택) 사용자에게 알림 (너무 자주 뜨면 불편할 수 있음)
+                            // alert('최대 5줄까지만 입력 가능합니다.');
+                        }
+
+                        // 줄 수 카운터 업데이트
+                        lineCounter.textContent = `${currentLines} / ${maxLines} 줄${currentLines >= maxLines ? ' (최대)' : ''}`;
+                    });
+                    group.appendChild(lineCounter); // 줄 수 카운터를 그룹에 추가
+                }
+          break;
+        case 'text':
+          element = document.createElement('input');
+          element.type = 'text';
+          if (field.placeholder) element.placeholder = field.placeholder;
+          if (field.defaultValue) element.value = field.defaultValue;
+
+          if (field.name === '랜딩 URL') {
+            element.addEventListener('input', (e) => {
+              if (e.target.value.toLowerCase().includes('livebridge')) {
+                alert('"livebridge"가 포함된 URL은 입력할 수 없습니다.');
+                e.target.value = '';
+              }
+            });
+          }
+          group.appendChild(label);
+          group.appendChild(element);
+          break;
+        case 'select':
+          element = document.createElement('select');
+          element.innerHTML = `<option value="">선택...</option>` + field.options.map(o => `<option value="${o}">${o}</option>`).join('');
+          if (field.defaultValue) element.value = field.defaultValue;
+          group.appendChild(label);
+          group.appendChild(element);
+          break;
+        case 'multiselect_checkbox':
+          element = document.createElement('div');
+          element.className = 'checkbox-group';
+          element.style.maxHeight = '200px';
+          element.style.overflowY = 'auto';
+          element.style.border = '1px solid #ccc';
+          element.style.padding = '10px';
+          element.style.borderRadius = '4px';
+
+          field.options.forEach(opt => {
+              const checkLabel = document.createElement('label');
+              checkLabel.style.display = 'block';
+              checkLabel.style.marginBottom = '5px';
+              const checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+              checkbox.name = field.name;
+              checkbox.value = opt;
+              checkLabel.appendChild(checkbox);
+              checkLabel.appendChild(document.createTextNode(' ' + opt));
+              element.appendChild(checkLabel);
+          });
+          group.appendChild(label);
+          group.appendChild(element);
+          break;
+        case 'number_unlimited':
+          element = document.createElement('div');
+          element.className = 'input-wrapper';
+          const numInput = document.createElement('input');
+          numInput.type = 'number';
+          numInput.name = field.name;
+          if (field.allowFloat) numInput.step = 'any';
+          const unlimitedLabel = document.createElement('label');
+          const unlimitedCheckbox = document.createElement('input');
+          unlimitedCheckbox.type = 'checkbox';
+          unlimitedCheckbox.name = `${field.name}_unlimited`;
+          unlimitedLabel.appendChild(unlimitedCheckbox);
+          unlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+          unlimitedCheckbox.addEventListener('change', () => {
+            numInput.disabled = unlimitedCheckbox.checked;
+            if (unlimitedCheckbox.checked) numInput.value = '';
+          });
+          element.appendChild(numInput);
+          element.appendChild(unlimitedLabel);
+          group.appendChild(label);
+          group.appendChild(element);
+          break;
+        case 'datetime_picker':
+          element = document.createElement('div');
+          element.className = 'input-wrapper';
+          const dtInput = document.createElement('input');
+          dtInput.type = 'text';
+          dtInput.name = field.name;
+          dtInput.placeholder = '날짜와 시간을 선택하세요';
+          const defaultDate = new Date();
+          const [h, m] = (field.defaultTime || '00:00').split(':');
+          defaultDate.setHours(h, m, 0, 0);
+          flatpickr(dtInput, { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, defaultDate: defaultDate });
+          element.appendChild(dtInput);
+          if (field.hasUnlimited) {
+            const dtUnlimitedLabel = document.createElement('label');
+            const dtUnlimitedCheckbox = document.createElement('input');
+            dtUnlimitedCheckbox.type = 'checkbox';
+            dtUnlimitedCheckbox.name = `${field.name}_unlimited`;
+            dtUnlimitedLabel.appendChild(dtUnlimitedCheckbox);
+            dtUnlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+            dtUnlimitedCheckbox.addEventListener('change', () => {
+              dtInput.disabled = dtUnlimitedCheckbox.checked;
+              if (dtUnlimitedCheckbox.checked) {
+                dtInput.value = '무제한';
+                dtInput._flatpickr.clear();
+              }
+              else dtInput._flatpickr.setDate(defaultDate, true);
+            });
+            element.appendChild(dtUnlimitedLabel);
+          }
+          group.appendChild(label);
+          group.appendChild(element);
+          break;
+        case 'dynamic_table':
+            group.innerHTML = `<h4>${field.name}</h4>`;
+            
+            const tableWrapper = document.createElement('div');
+            tableWrapper.style.overflowX = 'auto';
+            tableWrapper.style.paddingBottom = '10px';
+            const tableContent = document.createElement('div');
+            tableContent.style.minWidth = '1200px'; 
+            const headerDiv = document.createElement('div');
+            headerDiv.style.display = 'flex';
+            headerDiv.style.gap = '10px';
+            headerDiv.style.marginBottom = '5px';
+            headerDiv.style.fontWeight = 'bold';
+            headerDiv.style.fontSize = '12px';
+            headerDiv.innerHTML = `
+                <div style="width: 100px;">슬랏</div>
+                <div style="flex: 2;">캠페인명</div>
+                <div style="flex: 1.5;">광고주 어드민 ID</div>
+                <div style="width: 150px;">라이브 시작 일시</div>
+                <div style="width: 150px;">라이브 종료 일시</div>
+                <div style="width: 90px;">데일리 시작</div>
+                <div style="width: 90px;">데일리 종료</div>
+                <div style="width: 90px;">일물량</div>
+                <div style="flex: 2;">URL</div>
+                <div style="width: 50px;"></div>
+            `;
+            tableContent.appendChild(headerDiv);
+            const tableContainer = document.createElement('div');
+            tableContainer.id = 'dynamicTableContainer';
+            tableContent.appendChild(tableContainer);
+            tableWrapper.appendChild(tableContent);
+            group.appendChild(tableWrapper);
+
+            const errorDiv = document.createElement('div');
+            errorDiv.id = 'dynamicTableError';
+            errorDiv.className = 'field-error-message';
+            errorDiv.style.display = 'none';
+            group.appendChild(errorDiv);
+
+            const addRowBtn = document.createElement('button');
+            addRowBtn.type = 'button';
+            addRowBtn.textContent = '데이터 추가';
+            addRowBtn.className = 'submit-btn';
+            addRowBtn.style.marginTop = '10px';
+            addRowBtn.onclick = addDynamicTableRow;
+            group.appendChild(addRowBtn);
+            
+            form.appendChild(group);
+            break;
+        case 'file_upload':
+            element = document.createElement('div');
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'image/*';
+            fileInput.required = field.required;
+
+            const hiddenData = document.createElement('input');
+            hiddenData.type = 'hidden';
+            hiddenData.name = 'creative_file_data';
+            const hiddenName = document.createElement('input');
+            hiddenName.type = 'hidden';
+            hiddenName.name = 'creative_file_name';
+            const hiddenType = document.createElement('input');
+            hiddenType.type = 'hidden';
+            hiddenType.name = 'creative_file_type';
+            
+            const preview = document.createElement('img');
+            preview.style.maxWidth = '100%';
+            preview.style.maxHeight = '200px';
+            preview.style.marginTop = '10px';
+            preview.style.display = 'none';
+
+            fileInput.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                if (file.size > (field.maxSize * 1024)) {
+                    alert(`파일 용량은 ${field.maxSize}KB를 초과할 수 없습니다.`);
+                    fileInput.value = '';
+                    preview.style.display = 'none';
+                    hiddenData.value = '';
+                    hiddenName.value = '';
+                    hiddenType.value = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const base64String = event.target.result.split(',')[1];
+                    preview.src = event.target.result;
+                    preview.style.display = 'block';
+                    hiddenData.value = base64String;
+                    hiddenName.value = file.name;
+                    hiddenType.value = file.type;
+                };
+                reader.readAsDataURL(file);
+            };
+            
+            element.appendChild(fileInput);
+            element.appendChild(hiddenData);
+            element.appendChild(hiddenName);
+            element.appendChild(hiddenType);
+            element.appendChild(preview);
+            group.appendChild(label);
+            group.appendChild(element);
+            break;
+        case 'textarea_limited':
+            element = document.createElement('div');
+            const textarea = document.createElement('textarea');
+            textarea.name = field.name;
+            textarea.rows = field.rows || 3;
+            textarea.required = field.required;
+            textarea.maxLength = field.maxLength;
+            
+            const counter = document.createElement('div');
+            counter.className = 'description';
+            counter.style.textAlign = 'right';
+            counter.textContent = `0 / ${field.maxLength}`;
+
+            textarea.addEventListener('input', () => {
+                counter.textContent = `${textarea.value.length} / ${field.maxLength}`;
+            });
+
+            if (field.name.includes('커버) 광고 타이틀')) {
+                textarea.addEventListener('input', (e) => {
+                    const regex = /[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s]/g; // 한글, 영문, 숫자, 공백만 허용
+                    if (regex.test(e.target.value)) {
+                        alert('특수문자는 입력할 수 없습니다.');
+                        e.target.value = e.target.value.replace(regex, '');
+                        textarea.dispatchEvent(new Event('input')); // 카운터 업데이트
+                    }
+                });
+            }
+
+            element.appendChild(textarea);
+            element.appendChild(counter);
+            group.appendChild(label);
+            group.appendChild(element);
+            break;
+        case 'sub_type_select':
+            element = document.createElement('select');
+            element.innerHTML = `<option value="">선택...</option>` + field.options.map(o => `<option value="${o}">${o}</option>`).join('');
+            element.name = field.name;
+            element.required = field.required;
+
+            const subFormContainer = document.createElement('div');
+            subFormContainer.id = 'cashslideSubFormContainer';
+            subFormContainer.style.marginTop = '20px';
+
+            element.addEventListener('change', (e) => {
+                const subType = e.target.value;
+                buildCashslideSubForm(subType, subFormContainer);
+            });
+
+            group.appendChild(label);
+            group.appendChild(element);
+            
+            form.appendChild(group);
+            form.appendChild(subFormContainer);
+            element = null;
+            break;
+        case 'pasteable_table':
+            element = document.createElement('div');
+            const pasteTextarea = document.createElement('textarea');
+            pasteTextarea.name = field.name;
+            pasteTextarea.required = field.required;
+            pasteTextarea.rows = 8;
+            pasteTextarea.placeholder = '스프레드시트에서 제목 줄을 제외한 데이터를 복사하여 붙여넣으세요.';
+            
+            const previewContainer = document.createElement('div');
+            previewContainer.id = 'pasteableTablePreviewContainer';
+            previewContainer.style.marginTop = '10px';
+            previewContainer.style.overflowX = 'auto';
+            previewContainer.style.paddingBottom = '10px';
+            
+            const errorContainer = document.createElement('div');
+            errorContainer.id = 'pasteableTableError';
+            errorContainer.className = 'field-error-message';
+            errorContainer.style.display = 'none';
+
+            pasteTextarea.addEventListener('input', () => {
+                renderPasteableTablePreview(pasteTextarea, previewContainer, errorContainer, field.headers);
+            });
+
+            element.appendChild(pasteTextarea);
+            element.appendChild(previewContainer);
+            element.appendChild(errorContainer);
+
+            group.appendChild(label);
+            group.appendChild(element);
+            break;
+      }
+      
+      if (element && element.tagName !== 'DIV') {
+        element.name = field.name;
+      }
+      if(field.required) {
+          const inputs = group.querySelectorAll('input:not([type=checkbox]), select, textarea');
+          inputs.forEach(inp => inp.required = true);
+      }
+      
+      if (element) { 
+        form.appendChild(group);
+      }
+      
+      if (field.dependency) {
+        dependencies.push({
+          target: group,
+          field: field.dependency.field,
+          showsOn: field.dependency.showsOn
+        });
+      }
+    });
+
+    dependencies.forEach(dep => {
+      const sourceElement = form.querySelector(`[name="${dep.field}"]`);
+      if (sourceElement) {
+        const handleDependency = () => {
+          const show = Array.isArray(dep.showsOn) ? dep.showsOn.includes(sourceElement.value) : sourceElement.value === dep.showsOn;
+          dep.target.style.display = show ? 'block' : 'none';
+          dep.target.querySelectorAll('input, select, textarea').forEach(el => {
+            const fieldDef = fields.find(f => f.name === el.name);
+            el.disabled = !show;
+            if(fieldDef && fieldDef.required) {
+              el.required = show;
+            }
+          });
+        };
+        sourceElement.addEventListener('change', handleDependency);
+        handleDependency();
+      }
+    });
+
+    const advertiserInput = form.querySelector('[name="광고주"]');
+    const adTypeInput = form.querySelector('[name="광고 타입"]');
+
+    const updateAllCampaignNames = () => {
+        document.querySelectorAll('.dynamic-row').forEach((row, index) => {
+            const slotSelect = row.querySelector(`[name="slot_${index}"]`);
+            if (slotSelect) {
+                updateCampaignName(slotSelect, index);
+            }
+        });
+    };
+
+    if (advertiserInput) advertiserInput.addEventListener('input', updateAllCampaignNames);
+    if (adTypeInput) adTypeInput.addEventListener('change', updateAllCampaignNames);
+
+    if (typeof formId === 'string') {
+      const footer = document.createElement('div');
+      footer.className = 'sticky-footer';
+      const submitBtn = document.createElement('button');
+      submitBtn.className = 'submit-btn';
+      submitBtn.textContent = '캐시슬라이드 등록 요청';
+      submitBtn.type = 'button';
+      submitBtn.onclick = () => openCashslideConfirmationModal();
+      footer.appendChild(submitBtn);
+      document.body.appendChild(footer);
+    }
+}
+
+
+function buildCashslideSubForm(subType, container) {
+    container.innerHTML = '';
+    if (!subType || !allCashslideFormFieldsData || !allCashslideFormFieldsData.registration) return;
+
+    // 경로에 .registration 추가
+    const subFormFields = allCashslideFormFieldsData.registration['Cashslide']['캐슬_노출형(홈앤쇼핑)'].sub_forms[subType];
+
+    if (subFormFields) {
+        buildCashslideForm(container, subFormFields); // 하위 폼 생성 호출 (인자 false 제거 - 하위 폼에는 푸터 필요 없음)
+    } else {
+        // 정의되지 않은 하위 타입 선택 시 메시지
+        showMessage(`${subType} 하위 폼 정의를 찾을 수 없습니다.`, 'error');
+    }
+}
+
+function renderPasteableTablePreview(textarea, previewContainer, errorContainer, headers) {
+    const text = textarea.value.trim();
+    previewContainer.innerHTML = '';
+    errorContainer.style.display = 'none';
+
+    if (!text) return;
+
+    const lines = text.split('\n');
+    const columnCount = headers.length;
+    
+    // 테이블 HTML 생성 시작
+    let tableHtml = '<p><b>미리보기</b></p><table style="border-collapse: collapse; font-size: 12px; min-width: 100%;"><thead><tr style="background-color:#f8f9fa;">';
+    headers.forEach(h => tableHtml += `<th style='border: 1px solid #ddd; padding: 8px; white-space: nowrap; text-align: left;'>${h}</th>`);
+    tableHtml += '</tr></thead><tbody>';
+
+    let hasError = false;
+    lines.forEach((line, index) => {
+        const columns = line.split('\t');
+        if (columns.length !== columnCount) {
+            errorContainer.textContent = `${index + 1}번째 행의 열 개수(${columns.length}개)가 헤더(${columnCount}개)와 일치하지 않습니다.`;
+            errorContainer.style.display = 'block';
+            hasError = true;
+            return; // 에러 발견 시 루프 중단
+        }
+        tableHtml += '<tr>';
+        columns.forEach(col => tableHtml += `<td style='border: 1px solid #ddd; padding: 8px; white-space: nowrap;'>${col}</td>`);
+        tableHtml += '</tr>';
+    });
+
+    if (hasError) {
+        previewContainer.innerHTML = ''; // 에러가 있으면 미리보기를 비웁니다.
+    } else {
+        tableHtml += '</tbody></table>';
+        previewContainer.innerHTML = tableHtml; // 정상적인 경우에만 미리보기를 표시합니다.
+    }
+  }
+
+function addDynamicTableRow() {
+    const container = document.getElementById('dynamicTableContainer');
+    const rowIndex = container.children.length;
+    const row = document.createElement('div');
+    row.className = 'dynamic-row';
+    row.style.display = 'flex';
+    row.style.gap = '10px';
+    row.style.alignItems = 'center';
+    row.style.marginBottom = '10px';
+
+    const subType = document.getElementById('cashslideAdType').value;
+    let slotOptions = '';
+
+    if (subType === '캐슬_노출형(오토뷰)' || subType === '캐슬_노출형(맥스뷰)') { // 맥스뷰 조건 추가
+        slotOptions = ['CPV-01', 'CPV-02', 'CPV-03'].map(o => `<option value="${o}">${o}</option>`).join('');
+    } else {
+        slotOptions = ['01번', '02번', '03번'].map(o => `<option value="${o}">${o}</option>`).join('');
+    }
+
+    row.innerHTML = `
+      <select name="slot_${rowIndex}" onchange="updateCampaignName(this, ${rowIndex})" style="width: 100px;"><option value="">선택</option>${slotOptions}</select>
+      <input type="text" name="campaign_name_${rowIndex}" style="flex: 2;">
+      <input type="text" name="admin_id_${rowIndex}" style="flex: 1.5;">
+      <input type="text" name="start_date_${rowIndex}" class="cs-datetime" style="width: 150px;">
+      <input type="text" name="end_date_${rowIndex}" class="cs-datetime" style="width: 150px;">
+      <input type="text" name="daily_start_time_${rowIndex}" class="cs-time" style="width: 90px;">
+      <input type="text" name="daily_end_time_${rowIndex}" class="cs-time" style="width: 90px;">
+      <input type="text" name="daily_volume_${rowIndex}" style="width: 90px;">
+      <input type="text" name="url_${rowIndex}" style="flex: 2;">
+      <button type="button" class="close-btn" style="width: 50px; background-color:#dc3545;" onclick="this.parentElement.remove()">삭제</button>
+    `;
+    
+    container.appendChild(row);
+
+    flatpickr(row.querySelector(`[name="start_date_${rowIndex}"]`), { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, defaultDate: new Date().setHours(0,0,0,0) });
+    flatpickr(row.querySelector(`[name="end_date_${rowIndex}"]`), { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, defaultDate: new Date().setHours(23,59,0,0) });
+    flatpickr(row.querySelector(`[name="daily_start_time_${rowIndex}"]`), { enableTime: true, noCalendar: true, dateFormat: "H:i", time_24hr: true, defaultDate: "00:00" });
+    flatpickr(row.querySelector(`[name="daily_end_time_${rowIndex}"]`), { enableTime: true, noCalendar: true, dateFormat: "H:i", time_24hr: true, defaultDate: "23:59" });
+    
+    updateCampaignName(row.querySelector(`[name="slot_${rowIndex}"]`), rowIndex);
+}
+  
+
+function updateCampaignName(selectElement, rowIndex) {
+    const form = document.getElementById('cashslideForm');
+    const subType = document.getElementById('cashslideAdType').value;
+    const advertiser = form.querySelector('[name="광고주"]').value;
+    const slot = selectElement.value;
+    const campaignNameInput = form.querySelector(`[name="campaign_name_${rowIndex}"]`);
+    
+    if (campaignNameInput) {
+        if (subType === '캐슬_노출형(오토뷰)') {
+            const slotNumber = slot.replace('CPV-', '');
+            campaignNameInput.value = (slot && advertiser) ? `[CPV+${slotNumber}] 오토뷰 ${advertiser}` : '';
+        } else if (subType === '캐슬_노출형(맥스뷰)') { // 맥스뷰 조건 추가
+            const slotNumber = slot.replace('CPV-', '');
+            campaignNameInput.value = (slot && advertiser) ? `[CPV+${slotNumber}] 맥스뷰 ${advertiser}` : '';
+        } else {
+            const adTypeOption = form.querySelector('[name="광고 타입"]').value;
+            const slotNumberText = slot.replace('번', '');
+            if (slot && advertiser && adTypeOption) {
+                campaignNameInput.value = `[${adTypeOption}-${slotNumberText}] ${advertiser}`;
+            } else {
+                campaignNameInput.value = '';
+            }
+        }
+    }
+}
+
+function openCashslideConfirmationModal() {
+    const form = document.getElementById('cashslideForm');
+    const subType = document.getElementById('cashslideAdType').value;
+    const dynamicTableError = document.getElementById('dynamicTableError');
+    if (dynamicTableError) {
+      dynamicTableError.textContent = '';
+      dynamicTableError.style.display = 'none';
+    }
+
+    let isLineLengthValid = true;
+    const titleTextarea = form.querySelector('textarea[name="타이틀"]');
+    const productInfoTextarea = form.querySelector('textarea[name="상품정보"]');
+
+    if (subType === '캐슬_라이브적립') {
+        if (titleTextarea && !validateLineLength({ target: titleTextarea }, 14)) {
+            isLineLengthValid = false;
+            titleTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        if (isLineLengthValid && productInfoTextarea && !validateLineLength({ target: productInfoTextarea }, 20)) {
+            isLineLengthValid = false;
+            productInfoTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    if (!isLineLengthValid) {
+        showMessage('각 줄의 글자 수 제한을 확인해주세요.', 'error');
+        return; // 유효성 검사 실패 시 중단
+    }
+
+    if (!form.checkValidity()) {
+      showMessage('모든 필수 항목(*)을 입력해주세요.', 'error');
+      form.reportValidity();
+      return;
+    }
+
+    currentFormData = {};
+    const formData = new FormData(form);
+    for (const [key, value] of formData.entries()) {
+      if (value) {
+          if (currentFormData.hasOwnProperty(key)) {
+            if (!Array.isArray(currentFormData[key])) {
+                currentFormData[key] = [currentFormData[key]];
+            }
+            currentFormData[key].push(value);
+        } else {
+            currentFormData[key] = value;
+        }
+      }
+    }
+
+    const dynamicRows = [];
+    if (subType === '캐슬_노출형(기본)' || subType === '캐슬_노출형(오토뷰)' || subType === '캐슬_노출형(맥스뷰)') {
+      document.querySelectorAll('#dynamicTableContainer .dynamic-row').forEach((row, index) => {
+          const rowData = {
+              "슬랏": row.querySelector(`[name="slot_${index}"]`).value,
+              "캠페인명": row.querySelector(`[name="campaign_name_${index}"]`).value,
+              "광고주 어드민 ID": row.querySelector(`[name="admin_id_${index}"]`).value,
+              "라이브 시작 일시": row.querySelector(`[name="start_date_${index}"]`).value,
+              "라이브 종료 일시": row.querySelector(`[name="end_date_${index}"]`).value,
+              "데일리 라이브 시작 시간": row.querySelector(`[name="daily_start_time_${index}"]`).value,
+              "데일리 라이브 종료 시간": row.querySelector(`[name="daily_end_time_${index}"]`).value,
+              "일물량": row.querySelector(`[name="daily_volume_${index}"]`).value,
+              "URL": row.querySelector(`[name="url_${index}"]`).value
+          };
+          dynamicRows.push(rowData);
+      });
+      currentFormData.dynamicTableData = dynamicRows;
+      
+      if (dynamicRows.length === 0) {
+        if (dynamicTableError) {
+          dynamicTableError.textContent = '기본 노출형 설정을 하나 이상 추가해주세요.';
+          dynamicTableError.style.display = 'block';
+          dynamicTableError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          showMessage('기본 노출형 설정을 하나 이상 추가해주세요.', 'error');
+        }
+        return;
+      }
+    }
+
+  let summaryHtml = '<h4>기본 정보</h4><table>';
+  
+  const fieldDefinitions = allCashslideFormFieldsData.registration['Cashslide'][subType].fields;
+
+  fieldDefinitions.forEach(field => {
+      if (field.type === 'dynamic_table') return;
+
+      if (field.type === 'file_upload') {
+          const fileName = currentFormData['creative_file_name'];
+          if (fileName) {
+              summaryHtml += `<tr><th>${field.name}</th><td>${fileName}</td></tr>`;
+              const imgSrc = `data:${currentFormData.creative_file_type};base64,${currentFormData.creative_file_data}`;
+              summaryHtml += `<tr><th>소재 미리보기</th><td><img src="${imgSrc}" style="max-width: 100%; max-height: 200px; border: 1px solid #ddd; border-radius: 4px;"></td></tr>`;
+          }
+          return;
+      }
+
+      let value = currentFormData[field.name];
+      if (value) {
+          if (Array.isArray(value)) {
+              value = value.join(', ');
+          }
+          const displayValue = String(value).replace(/\n/g, '<br>');
+          summaryHtml += `<tr><th>${field.name}</th><td>${displayValue}</td></tr>`;
+      }
+  });
+
+
+  if (subType === '캐슬_노출형(홈앤쇼핑)') {
+    const hnsSubType = currentFormData['홈앤쇼핑 광고 타입'];
+    const hnsSubFormFields = allCashslideFormFieldsData.registration['Cashslide'][subType].sub_forms[hnsSubType];
+    if (hnsSubFormFields) {
+      hnsSubFormFields.forEach(field => {
+        let value = currentFormData[field.name];
+        if (value) {
+          if (field.type === 'pasteable_table') {
+            const previewContainer = document.getElementById('pasteableTablePreviewContainer');
+            if(previewContainer) {
+               const scrollableDiv = `<div style="overflow-x: auto; padding-bottom: 10px;">${previewContainer.innerHTML}</div>`;
+               summaryHtml += `<tr><th>${field.name}</th><td>${scrollableDiv}</td></tr>`;
+            }
+          } else {
+            const displayValue = String(value).replace(/\n/g, '<br>');
+            summaryHtml += `<tr><th>${field.name}</th><td>${displayValue}</td></tr>`;
+          }
+        }
+      });
+    }
+  }
+
+  summaryHtml += '</table>';
+
+  if (dynamicRows.length > 0) {
+      summaryHtml += '<h4>기본 노출형 설정</h4>';
+      summaryHtml += '<div style="overflow-x: auto;">';
+      summaryHtml += '<table style="width:100%; min-width: 1000px; border-collapse: collapse; font-size: 12px;">';
+      summaryHtml += `
+        <thead>
+          <tr style="background-color:#f8f9fa;">
+            <th style="white-space: nowrap; padding: 8px; border: 1px solid #ddd;">슬랏</th>
+            <th style="white-space: nowrap; padding: 8px; border: 1px solid #ddd;">캠페인명</th>
+            <th style="white-space: nowrap; padding: 8px; border: 1px solid #ddd;">광고주 어드민 ID</th>
+            <th style="white-space: nowrap; padding: 8px; border: 1px solid #ddd;">라이브 시작 일시</th>
+            <th style="white-space: nowrap; padding: 8px; border: 1px solid #ddd;">라이브 종료 일시</th>
+            <th style="white-space: nowrap; padding: 8px; border: 1px solid #ddd;">데일리 시작</th>
+            <th style="white-space: nowrap; padding: 8px; border: 1px solid #ddd;">데일리 종료</th>
+            <th style="white-space: nowrap; padding: 8px; border: 1px solid #ddd;">일물량</th>
+            <th style="white-space: nowrap; padding: 8px; border: 1px solid #ddd;">URL</th>
+          </tr>
+        </thead>
+        <tbody>`;
+      dynamicRows.forEach(row => {
+          summaryHtml += `
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;">${row['슬랏']}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${row['캠페인명']}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${row['광고주 어드민 ID']}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${row['라이브 시작 일시']}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${row['라이브 종료 일시']}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${row['데일리 라이브 시작 시간']}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${row['데일리 라이브 종료 시간']}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${row['일물량']}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${row['URL']}</td>
+            </tr>`;
+      });
+      summaryHtml += '</tbody></table></div>';
+  }
+  
+  let modalTitle = '';
+  const advertiser = currentFormData['광고주'] || '';
+  const campaign = currentFormData['캠페인'] || '';
+
+  if (subType === '캐슬_노출형(라방패키지)') {
+    const liveStartDateStr = currentFormData['라이브 시작일시'];
+    const liveStartDate = new Date(liveStartDateStr);
+    const datePart = `${String(liveStartDate.getFullYear()).slice(-2)}/${String(liveStartDate.getMonth() + 1).padStart(2, '0')}/${String(liveStartDate.getDate()).padStart(2, '0')}`;
+    const timePart = `${liveStartDate.getHours()}시`;
+    
+    const titleParts = [ `[라방패키지] ${advertiser}`, campaign, `${datePart}_${timePart}_라방패키지` ];
+    modalTitle = titleParts.filter(Boolean).join('_');
+  } else if (subType === '캐슬_라이브적립') {
+    const liveStartDateStr = currentFormData['라이브 시작일시'];
+    const liveStartDate = new Date(liveStartDateStr);
+    const datePart = `${String(liveStartDate.getFullYear()).slice(-2)}/${String(liveStartDate.getMonth() + 1).padStart(2, '0')}/${String(liveStartDate.getDate()).padStart(2, '0')}`;
+    const timePart = `${liveStartDate.getHours()}시`;
+
+    modalTitle = `[라이브적립] ${advertiser}_${datePart}_${timePart}`;
+  } else if (subType === '캐슬_노출형(홈앤쇼핑)') {
+      const hnsSubType = currentFormData['홈앤쇼핑 광고 타입'];
+      const pastedData = (currentFormData['세부 정보 (복사 붙여넣기)'] || '').trim().split('\n');
+      let startDate = '';
+      if (pastedData.length > 0) {
+          const firstRowColumns = pastedData[0].split('\t');
+          if (firstRowColumns.length > 4) {
+              startDate = formatDate_yyMMdd(firstRowColumns[4]);
+          }
+      }
+      const campaignName = '캐시슬라이드_CPS_' + hnsSubType;
+      modalTitle = `[잠금화면] ${campaignName}_${startDate}`;
+  } else if (subType === '캐슬_노출형(라방패키지)_유튜브') {
+      const liveStartDateStr = currentFormData['라이브 시작일시'];
+      const liveStartDate = new Date(liveStartDateStr);
+      // 날짜 포맷 (yy/MM/dd)
+      const datePart = `${String(liveStartDate.getFullYear()).slice(-2)}/${String(liveStartDate.getMonth() + 1).padStart(2, '0')}/${String(liveStartDate.getDate()).padStart(2, '0')}`;
+      // 시간 포맷 (HH시)
+      const timePart = `${liveStartDate.getHours()}시`;
+
+      const titleParts = [
+          `[라방패키지] ${advertiser}`, // "[라방패키지] 광고주"
+          campaign,                     // "캠페인"
+          '유튜브',                     // "유튜브"
+          `${datePart}~${timePart}`,    // "날짜~시간"
+          '라방패키지'                  // "라방패키지"
+      ];
+      modalTitle = titleParts.filter(Boolean).join('_');
+
+  } else if (subType === '캐슬_노출형(오토뷰)') {
+      let firstSlot = '';
+      if (dynamicRows.length > 0) {
+          firstSlot = dynamicRows[0]['슬랏'];
+      }
+      let startDate = formatDate_yyMMdd(dynamicRows.length > 0 ? dynamicRows[0]['라이브 시작 일시'] : '');
+      let endDate = formatDate_yyMMdd(dynamicRows.length > 0 ? dynamicRows[0]['라이브 종료 일시'] : '');
+
+      modalTitle = `[${firstSlot}] ${advertiser}_오토뷰_${startDate}~${endDate}`;
+  } else if (subType === '캐슬_노출형(맥스뷰)') {
+        let firstSlot = '';
+        if (dynamicRows.length > 0) {
+            firstSlot = dynamicRows[0]['슬랏'] || ''; // 예: CPV-01
+        }
+        let startDate = formatDate_yyMMdd(dynamicRows.length > 0 ? dynamicRows[0]['라이브 시작 일시'] : '');
+        let endDate = formatDate_yyMMdd(dynamicRows.length > 0 ? dynamicRows[0]['라이브 종료 일시'] : '');
+
+        modalTitle = `[${firstSlot || 'CPV-??'}] ${advertiser}_맥스뷰_${startDate}~${endDate}`;
+  } else {
+    let startDate = '';
+    let endDate = '';
+    if (dynamicRows.length > 0) {
+      startDate = formatDate_yyMMdd(dynamicRows[0]['라이브 시작 일시']);
+      endDate = formatDate_yyMMdd(dynamicRows[0]['라이브 종료 일시']);
+    } else {
+      startDate = formatDate_yyMMdd(currentFormData['광고 시작일시']);
+      const endDateValue = currentFormData['광고 종료일시_unlimited'] ? '무제한' : currentFormData['광고 종료일시'];
+      endDate = formatDate_yyMMdd(endDateValue);
+    }
+    const webviewPart = currentFormData['웹뷰 진행여부'] === '웹뷰 진행' ? '_웹뷰' : '';
+    const titleParts = [ `[잠금화면] ${advertiser}`, campaign, `${startDate}~${endDate}${webviewPart}` ];
+    modalTitle = titleParts.filter(Boolean).join('_');
+  }
+
+  document.getElementById('modalTitle').textContent = modalTitle;
+  document.getElementById('modalSummary').innerHTML = summaryHtml;
+
+  const finalSubmitBtn = document.getElementById('finalSubmitBtn');
+  const newBtn = finalSubmitBtn.cloneNode(true);
+  finalSubmitBtn.parentNode.replaceChild(newBtn, finalSubmitBtn);
+  newBtn.addEventListener('click', submitCashslideRegistrationRequest_client);
+
+  document.getElementById('confirmationModal').style.display = 'flex';
+}
+
+
+  function submitCashslideRegistrationRequest_client() {
+    currentFormData.ccRecipients = document.getElementById('ccRecipients').value.trim();
+    currentFormData.cashslideSubType = document.getElementById('cashslideAdType').value;
+    setLoading(true);
+    closeConfirmationModal();
+
+    google.script.run
+      .withSuccessHandler(function(response) {
+        setLoading(false);
+        if (response.success) {
+          showMessage(response.message, 'success');
+          alert(response.message);
+          document.getElementById('cashslideForm').innerHTML = '';
+          document.getElementById('cashslideAdType').value = '';
+          const footer = document.querySelector('.sticky-footer');
+          if (footer) footer.remove();
+        } else {
+          showMessage(response.message, 'error');
+        }
+      })
+      .withFailureHandler(handleError)
+      .submitCashslideRegistration(currentFormData);
+  }
+
+function formatDate_yyMMdd(dateStr) {
+    if (!dateStr || String(dateStr).toLowerCase() === '무제한') {
+      return '무제한';
+    }
+    try {
+      let normalizedDateStr = String(dateStr).split(' ')[0]; // 시간 정보 제거
+      normalizedDateStr = normalizedDateStr.replace(/\//g, '-'); // '/'를 '-'로 변경
+      
+      const parts = normalizedDateStr.split('-');
+      if (parts.length === 3) {
+        if (parts[0].length === 2) {
+          parts[0] = '20' + parts[0]; // yy-mm-dd 형식을 20yy-mm-dd로 변경
+        }
+        normalizedDateStr = parts.join('-');
+      }
+
+      const date = new Date(normalizedDateStr);
+      // 날짜 객체가 유효한지 확인
+      if (isNaN(date.getTime())) {
+          return ''; // 유효하지 않으면 빈 문자열 반환
+      }
+
+      const year = date.getFullYear().toString().slice(-2);
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      return `${year}/${month}/${day}`;
+    } catch (e) {
+      return ''; // 날짜 형식이 아닐 경우 빈 문자열 반환
+    }
+  }
+
+
+/**
+ * '캐시슬라이드 광고 불러오기' 버튼 클릭 시 실행. (수정: 폼 구조 데이터 선로딩 로직 추가)
+ */
+function loadCashslideAdData() {
+  const adId = document.getElementById('loadCashslideAdId').value.trim();
+  if (!adId) {
+    showMessage('불러올 캐시슬라이드 광고 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+
+  // 광고 데이터를 실제로 불러와 폼에 채우는 함수
+  const fetchAndPopulate = () => {
+    google.script.run
+      .withSuccessHandler(function(data) {
+        setLoading(false);
+        if (data) {
+          populateCashslideFormWithData(data);
+        } else {
+          showMessage(`ID '${adId}'에 해당하는 캐시슬라이드 광고를 찾을 수 없습니다.`, 'error');
+        }
+      })
+      .withFailureHandler(handleError)
+      .getCashslideAdDataById(adId);
+  };
+
+  // 1. 폼 구조 데이터가 있는지 확인합니다.
+  if (allCashslideFormFieldsData) {
+    // 2a. 데이터가 이미 있으면, 바로 광고 데이터를 불러옵니다.
+    fetchAndPopulate();
+  } else {
+    // 2b. 데이터가 없으면, 폼 구조 데이터를 먼저 불러옵니다.
+    google.script.run
+      .withSuccessHandler(function(formStructureData) {
+        allCashslideFormFieldsData = formStructureData; // 전역 변수에 저장
+        // 3. 폼 구조 로딩이 완료된 후, 광고 데이터를 불러옵니다.
+        fetchAndPopulate();
+      })
+      .withFailureHandler(handleError)
+      .getCashslideAllFormFields();
+  }
+}
+
+function populateCashslideFormWithData(data) {
+  const adType = data.ad_type;
+  if (!adType) {
+    showMessage('불러온 데이터에 광고 타입 정보가 없습니다.', 'error');
+    return;
+  }
+  
+  showSection('cashslideRegistrationSection');
+  document.getElementById('cashslideAdType').value = adType;
+  
+  // 폼 구조를 먼저 생성
+  loadCashslideForm(adType);
+
+ setTimeout(() => {
+    const form = document.getElementById('cashslideForm');
+    const headerToNameMap = {
+      // 공통 및 기본
+      'request_details': '요청사항', 'advertiser_admin_id': '광고주 어드민 ID (신규 or 기존 ID)',
+      'advertiser_name': '광고주', 'campaign_name': '캠페인', 'ad_type_option': '광고 타입',
+      // 웹뷰
+      'webview_enabled': '웹뷰 진행여부', 'webview_url': '웹뷰 URL',
+      'webview_top_overlay_height': '상단 오버레이 영역 높이', 'webview_top_overlay_color': '상단 오버레이 색',
+      'webview_bottom_overlay_height': '하단 오버레이 영역 높이', 'webview_bottom_overlay_color': '하단 오버레이 색',
+      // 소재
+      'creative_path': '소재경로',
+      // 타겟팅
+      'demo_target_1': '데모타겟1', 'demo_target_2': '데모타겟2', 'retarget_cluster': '리타겟 클러스터',
+      'app_package_retargeting': '앱 패키지명 - 리타겟팅', 'app_package_detargeting': '앱 패키지명 - 디타겟팅',
+      'lbs_latitude': 'LBS 타겟팅 - 위도', 'lbs_longitude': 'LBS 타겟팅 - 경도', 'lbs_radius': 'LBS 타겟팅 - 범위',
+      'tag': '태그',
+      // 프리퀀시 및 기타 설정
+      'frequency_criteria': '프리퀀시 기준', 'frequency_type': '프리퀀시 타입',
+      'frequency_daily_limit': '일일 프리퀀시 제한 횟수', 'frequency_max_limit': '최대 프리퀀시 제한 횟수',
+      'tracker': '트래커', 'priority': '노출 우선순위', 'seg_filter': 'Seg Filter',
+      // 라방패키지 & 라이브적립
+      'live_start_date': '라이브 시작일시', 'live_end_date': '라이브 종료일시',
+      'ad_start_date': '광고 시작 일자 (자동계산)', 'ad_end_date': '광고 종료 일자 (자동계산)',
+      'title': '타이틀', 'product_info': '상품정보', 'landing_url': '랜딩 URL', 'detail_page_url': '상세 페이지 URL',
+      // 홈앤쇼핑
+      'hns_ad_type': '홈앤쇼핑 광고 타입', 'slot_priority': '슬랏 / 우선순위', 'frequency': '프리퀀시',
+      'targeting': '타겟팅', 'app_targeting': '앱타겟팅', 'cluster': '클러스터', 'daily_volume': '일물량',
+      'deeplink_info_json': '세부 정보 (복사 붙여넣기)',
+      // 오토뷰
+      'creative_path_image': '이미지 소재경로', 'creative_path_video': '영상 소재경로',
+      'autoplay_on_first_slide': '첫 슬라이드시 자동 재생 여부', 'dynamic_creative_loop': '동적소재 반복재생 여부',
+      // 맥스뷰
+      'slot': '슬랏',
+      'cover_template_setting': '커버 템플릿 설정',
+      'aspect_ratio': '선택형 화면비율',
+      'video_streaming': '동영상 스트리밍 여부',
+      'allow_margin': '여백허용',
+      'mid_roll_reward': '동영상 재생중간 적립 설정',
+      'cover_title_1': '커버) 광고 타이틀 1번째 줄',
+      'cover_title_2': '커버) 광고 타이틀 2번째 줄',
+      'cover_advertiser_title': '커버) 광고주 타이틀'
+    };
+
+    // 1. 폼 데이터 채우기
+    for (const key in headerToNameMap) {
+      if (adType === '캐슬_노출형(홈앤쇼핑)' && ['creative_path', 'slot_priority', 'frequency', 'targeting', 'app_targeting', 'daily_volume', 'deeplink_info_json'].includes(key)) {
+          continue;
+      }
+      const formFieldName = headerToNameMap[key];
+      let value = data[key];
+      if (value === null || String(value).trim() === '') continue;
+
+      if (key === 'deeplink_info_json' && adType === '캐슬_노출형(홈앤쇼핑)') {
+          const textarea = form.querySelector(`[name="${formFieldName}"]`);
+          if (textarea && value) {
+              try {
+                  const deeplinkData = JSON.parse(value);
+                  if (Array.isArray(deeplinkData)) {
+                      const headersOrder = ['라이브타이틀', '어드민', '2차 랜딩 URL', 'BgImg(W,H) 사이즈 확인', '시작일자', '종료일자', '라이브 시간', '소재명'];
+                      value = deeplinkData.map(row => headersOrder.map(header => row[header] || '').join('\t')).join('\n');
+                  }
+              } catch (e) { /* 파싱 실패 시 원본 값 사용 */ }
+          }
+      }
+      
+      if (key === 'tag') {
+        const tagValues = String(value).split(',').map(v => v.trim());
+        form.querySelectorAll('input[name="태그"][type="checkbox"]').forEach(checkbox => {
+          if (tagValues.includes(checkbox.value)) checkbox.checked = true;
+        });
+        continue;
+      }
+
+      const element = form.querySelector(`[name="${formFieldName}"]`);
+      if (!element) continue;
+
+      const unlimitedCheckbox = form.querySelector(`[name="${formFieldName}_unlimited"]`);
+      if (unlimitedCheckbox) { 
+        if (value === '무제한') unlimitedCheckbox.checked = true;
+        else {
+          unlimitedCheckbox.checked = false;
+          element.value = value;
+        }
+        unlimitedCheckbox.dispatchEvent(new Event('change'));
+      } else if (element._flatpickr) { 
+         element._flatpickr.setDate(value, true);
+      } else { 
+         element.value = value;
+         if (element.tagName === 'SELECT') {
+           element.dispatchEvent(new Event('change', { bubbles: true }));
+         }
+         if (element.tagName === 'TEXTAREA') {
+           element.dispatchEvent(new Event('input'));
+         }
+      }
+    }
+
+
+    
+    // 2. '홈앤쇼핑' 타입일 경우, 하위 폼 렌더링 강제 실행
+    if (adType === '캐슬_노출형(홈앤쇼핑)') {
+        const subFormContainer = document.getElementById('cashslideSubFormContainer');
+        if (subFormContainer) {
+            const fieldsToFillInSubForm = ['creative_path', 'slot_priority', 'frequency', 'targeting', 'app_targeting', 'daily_volume', 'deeplink_info_json'];
+
+            fieldsToFillInSubForm.forEach(key => {
+                const formFieldName = headerToNameMap[key];
+                let value = data[key];
+                if (value !== null && String(value).trim() !== '') {
+                    const element = subFormContainer.querySelector(`[name="${formFieldName}"]`); // 하위 폼 컨테이너에서 검색
+                    if (element) {
+                        // '세부 정보' 필드는 JSON 파싱 및 변환 로직 적용
+                        if (key === 'deeplink_info_json') {
+                             try {
+                                const deeplinkData = JSON.parse(value);
+                                if (Array.isArray(deeplinkData)) {
+                                    const headersOrder = ['라이브타이틀', '어드민', '2차 랜딩 URL', 'BgImg(W,H) 사이즈 확인', '시작일자', '종료일자', '라이브 시간', '소재명'];
+                                    value = deeplinkData.map(row => headersOrder.map(header => row[header] || '').join('\t')).join('\n');
+                                }
+                             } catch (e) { /* 파싱 실패 시 원본 값 사용 */ }
+                        }
+                        element.value = value;
+                        // '세부 정보' 필드의 경우 input 이벤트를 발생시켜 미리보기 테이블 업데이트
+                        if (key === 'deeplink_info_json') {
+                            element.dispatchEvent(new Event('input'));
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    if (adType === '캐슬_노출형(맥스뷰)') {
+        const templateSelect = form.querySelector('[name="커버 템플릿 설정"]');
+        if (templateSelect) {
+            templateSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+    
+    // 3. '기본 노출형' 동적 테이블 데이터 채우기
+    if (data.exposure_settings_json) {
+      try {
+        const exposureSettings = JSON.parse(data.exposure_settings_json);
+        exposureSettings.forEach(setting => {
+          addDynamicTableRow();
+          const newRow = document.querySelector('#dynamicTableContainer .dynamic-row:last-child');
+          if (newRow) {
+            const index = newRow.parentElement.children.length - 1;
+            newRow.querySelector(`[name="slot_${index}"]`).value = setting['슬랏'];
+            newRow.querySelector(`[name="campaign_name_${index}"]`).value = setting['캠페인명'];
+            newRow.querySelector(`[name="admin_id_${index}"]`).value = setting['광고주 어드민 ID'];
+            newRow.querySelector(`[name="start_date_${index}"]`)._flatpickr.setDate(setting['라이브 시작 일시'], true);
+            newRow.querySelector(`[name="end_date_${index}"]`)._flatpickr.setDate(setting['라이브 종료 일시'], true);
+            newRow.querySelector(`[name="daily_start_time_${index}"]`)._flatpickr.setDate(setting['데일리 라이브 시작 시간'], true);
+            newRow.querySelector(`[name="daily_end_time_${index}"]`)._flatpickr.setDate(setting['데일리 라이브 종료 시간'], true);
+            newRow.querySelector(`[name="daily_volume_${index}"]`).value = setting['일물량'];
+            newRow.querySelector(`[name="url_${index}"]`).value = setting['URL'];
+          }
+        });
+      } catch (e) {
+        console.error('기본 노출형 데이터를 파싱하는 데 실패했습니다:', e);
+      }
+    }
+    
+    showMessage('캐시슬라이드 광고 데이터를 성공적으로 불러왔습니다.', 'success');
+  }, 500); 
+}
+
+
+
+/**
+ * '캐시슬라이드 등록 요청 스킵' 버튼 클릭 시 실행될 함수.
+ * 서버의 processCashslideSkip 함수를 호출합니다.
+ */
+function submitCashslideSkip() {
+  const adId = document.getElementById('cashslideSkipId').value.trim();
+  if (!adId) {
+    showMessage('스킵할 캐시슬라이드 광고 ID를 입력해주세요.', 'error');
+    return;
+  }
+
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('cashslideSkipId').value = '';
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .processCashslideSkip(adId);
+}
+
+/**
+ * '캐시슬라이드 등록 요청 반려' 버튼 클릭 시 실행될 함수.
+ * 서버의 processCashslideRejection 함수를 호출합니다.
+ */
+function submitCashslideRejection() {
+  const adId = document.getElementById('cashslideRejectionId').value.trim();
+  const reason = document.getElementById('cashslideRejectionReason').value.trim();
+
+  if (!adId) {
+    showMessage('반려할 캐시슬라이드 광고 ID를 입력해주세요.', 'error');
+    return;
+  }
+
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('cashslideRejectionId').value = '';
+        document.getElementById('cashslideRejectionReason').value = '';
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .processCashslideRejection(adId, reason);
+}
+
+/**
+ * '캐시슬라이드 수정 요청' 섹션이 표시될 때 폼을 빌드합니다.
+ * dataToFill 객체가 있으면 폼 생성 후 데이터를 채웁니다.
+ * @param {object} [dataToFill] - 폼에 채울 데이터 객체 (선택 사항)
+ */
+function buildCashslideModificationForm(dataToFill) {
+    const form = document.getElementById('cashslideModificationRequestForm');
+    form.innerHTML = '';
+    const dependencies = [];
+
+    if (!allCashslideFormFieldsData || !allCashslideFormFieldsData.modification) {
+        // 데이터 로딩 실패 시 메시지 표시 (이전 단계에서 복원된 부분)
+        showMessage('수정 폼 구조를 불러오지 못했습니다. 새로고침 해주세요.', 'error');
+        return;
+    }
+    const fields = allCashslideFormFieldsData.modification.fields;
+
+    fields.forEach(field => {
+        const group = document.createElement('div');
+        group.className = 'form-group';
+        const label = document.createElement('label');
+        label.textContent = field.name;
+        if (field.required) label.className = 'required';
+
+        let element;
+        switch(field.type) {
+            case 'textarea':
+                element = document.createElement('textarea');
+                element.rows = field.rows;
+                if(field.placeholder) element.placeholder = field.placeholder;
+                break;
+            case 'select':
+                element = document.createElement('select');
+                element.innerHTML = `<option value="">선택...</option>` + field.options.map(o => `<option value="${o}">${o}</option>`).join('');
+                break;
+            case 'datetime_picker':
+                element = document.createElement('input');
+                element.type = 'text';
+                flatpickr(element, {
+                  enableTime: true,
+                  dateFormat: "Y-m-d H:i",
+                  time_24hr: true,
+                  onOpen: function(selectedDates, dateStr, instance) {
+                    if (!instance.input.value) {
+                      const defaultDate = new Date();
+                      let defaultH = 0, defaultM = 0;
+                      if (field.name === '라이브 종료일시') {
+                        defaultH = 23; defaultM = 59;
+                      }
+                      defaultDate.setHours(defaultH, defaultM, 0, 0);
+                      instance.setDate(defaultDate, false);
+                    }
+                  }
+                });
+                break;
+            case 'time_picker':
+                element = document.createElement('input');
+                element.type = 'text';
+                let defaultTimeValue = '00:00';
+                if (field.name === '데일리 라이브 종료 시간') {
+                    defaultTimeValue = '23:59';
+                }
+                flatpickr(element, {
+                    enableTime: true,
+                    noCalendar: true,
+                    dateFormat: "H:i",
+                    time_24hr: true,
+                    onOpen: function(selectedDates, dateStr, instance) {
+                        if (!instance.input.value) {
+                            instance.setDate(defaultTimeValue, false);
+                        }
+                    }
+                });
+                break;
+            default: // text
+                element = document.createElement('input');
+                element.type = 'text';
+                if(field.placeholder) element.placeholder = field.placeholder;
+
+                if (field.name === '노출 우선순위') {
+                    element.onfocus = function() {
+                        if (this.value === '') {
+                            this.value = '10';
+                        }
+                    };
+                }
+                break;
+        }
+
+        element.name = field.name;
+        element.required = field.required;
+
+        group.appendChild(label);
+        group.appendChild(element);
+        form.appendChild(group);
+
+        if (field.dependency) {
+            dependencies.push({
+                target: group,
+                field: field.dependency.field,
+                showsOn: field.dependency.showsOn
+            });
+        }
+    });
+
+    dependencies.forEach(dep => {
+        const sourceElement = form.querySelector(`[name="${dep.field}"]`);
+        if (sourceElement) {
+            const handleDependency = () => {
+                const show = Array.isArray(dep.showsOn) ? dep.showsOn.includes(sourceElement.value) : sourceElement.value === dep.showsOn;
+                dep.target.style.display = show ? 'block' : 'none';
+                dep.target.querySelectorAll('input, select, textarea').forEach(el => {
+                    el.disabled = !show;
+                    const fieldDef = fields.find(f => f.name === el.name);
+                    if (fieldDef && fieldDef.required) {
+                        el.required = show;
+                    } else {
+                        el.required = false;
+                    }
+                });
+            };
+            sourceElement.addEventListener('change', handleDependency);
+            handleDependency();
+        }
+    });
+
+    if (dataToFill) {
+        fillCashslideModificationForm(form, dataToFill);
+    }
+}
+
+
+/**
+ * '캐시슬라이드 수정 요청 확인 모달을 엽니다.
+ */
+function openCashslideModificationModal() {
+    // (이 함수는 수정 없이 그대로 유지)
+    const form = document.getElementById('cashslideModificationRequestForm');
+    if (!form.checkValidity()) {
+        showMessage('모든 필수 항목(*)을 입력해주세요.', 'error');
+        form.reportValidity();
+        return;
+    }
+    currentFormData = {};
+    const formData = new FormData(form);
+    let summaryHtml = '<table>';
+    formData.forEach((value, key) => {
+        if (value && value.trim()) {
+            currentFormData[key] = value;
+            summaryHtml += `<tr><th>${key}</th><td>${value.replace(/\n/g, '<br>')}</td></tr>`;
+        }
+    });
+    summaryHtml += '</table>';
+    const adName = currentFormData['광고명'] ? currentFormData['광고명'].split('\n')[0] : '이름 없음';
+    const modalTitle = `[캐슬_잠금화면] ${adName} 수정`;
+    document.getElementById('modalTitle').textContent = modalTitle;
+    document.getElementById('modalSummary').innerHTML = summaryHtml;
+    const finalSubmitBtn = document.getElementById('finalSubmitBtn');
+    const newBtn = finalSubmitBtn.cloneNode(true);
+    finalSubmitBtn.parentNode.replaceChild(newBtn, finalSubmitBtn);
+    newBtn.addEventListener('click', submitCashslideModificationRequest_client);
+    document.getElementById('confirmationModal').style.display = 'flex';
+}
+
+/**
+ * 최종 확인 후 서버에 캐시슬라이드 수정 요청을 제출합니다.
+ */
+function submitCashslideModificationRequest_client() {
+    // (이 함수는 수정 없이 그대로 유지)
+    currentFormData.ccRecipients = document.getElementById('ccRecipients').value.trim();
+    setLoading(true);
+    closeConfirmationModal();
+    google.script.run
+        .withSuccessHandler(function(response) {
+            setLoading(false);
+            if (response.success) {
+                showMessage(response.message, 'success');
+                alert(response.message);
+                document.getElementById('cashslideModificationRequestForm').reset();
+            } else {
+                showMessage(response.message, 'error');
+            }
+        })
+        .withFailureHandler(handleError)
+        .submitCashslideModificationRequest(currentFormData);
+}
+
+/**
+ * '캐시슬라이드 수정 불러오기' 버튼 클릭 시 실행됩니다.
+ * 폼을 생성하고 데이터를 채우는 과정을 조율합니다.
+ */
+function populateCashslideModificationFormWithData(data) {
+  showSection('cashslideModificationRequestSection');
+  // ▼▼▼ [핵심 수정] setTimeout 제거하고, 폼 빌드 함수를 바로 호출합니다. ▼▼▼
+  buildCashslideModificationForm(data); 
+  showMessage('캐시슬라이드 수정 요청 데이터를 성공적으로 불러왔습니다.', 'success');
+}
+
+/**
+ * 생성된 폼에 서버에서 받아온 데이터를 채웁니다.
+ * @param {HTMLElement} form - 데이터를 채울 form 요소
+ * @param {object} data - 서버에서 받아온 데이터 객체
+ */
+function fillCashslideModificationForm(form, data) {
+    // (이 함수는 수정 없이 그대로 유지)
+    const dataMap = {
+      'ad_id': '광고ID', 'ad_name': '광고명', 'request_details': '요청사항', 'advertiser_account_id': '광고주 계정 ID', 
+      'live_start_date': '라이브 시작일시', 'live_end_date': '라이브 종료일시', 'daily_live_start_time': '데일리 라이브 시작 시간', 'daily_live_end_time': '데일리 라이브 종료 시간',
+      'creative_path': '소재경로', 'daily_volume': '일물량', 'landing_url': '랜딩 URL', 'demo_target_1': '데모타겟1', 'demo_target_2': '데모타겟2', 
+      'retarget_cluster': '리타겟 클러스터', 'app_package_retargeting': '앱 패키지명 - 리타겟팅', 'app_package_detargeting': '앱 패키지명 - 디타겟팅', 
+      'lbs_latitude': 'LBS 타겟팅 - 위도', 'lbs_longitude': 'LBS 타겟팅 - 경도', 'lbs_radius': 'LBS 타겟팅 - 범위',
+      'frequency_criteria': '프리퀀시 기준', 'frequency_type': '프리퀀시 타입', 'daily_frequency_limit': '일일 프리퀀시 제한 횟수', 
+      'max_frequency_limit': '최대 프리퀀시 제한 횟수', 'tracker': '트래커', 'priority': '노출 우선순위', 'seg_filter': 'Seg Filter'
+    };
+    for (const key in dataMap) {
+      const formFieldName = dataMap[key];
+      const value = data[key];
+      if (value !== null && String(value).trim() !== '') {
+        const element = form.querySelector(`[name="${formFieldName}"]`);
+        if (!element) continue;
+        if (element._flatpickr) {
+          element._flatpickr.setDate(value, true);
+        } else {
+          element.value = value;
+        }
+        if (element.tagName === 'SELECT') {
+          element.dispatchEvent(new Event('change'));
+        }
+      }
+    }
+}
+
+/**
+ * '캐시슬라이드 수정 불러오기' 버튼 클릭 시 실행. 서버에 데이터 요청.
+ */
+function loadCashslideModificationData() {
+    // (이 함수는 수정 없이 그대로 유지)
+  const modId = document.getElementById('loadCashslideModId').value.trim();
+  if (!modId) {
+    showMessage('불러올 캐시슬라이드 수정 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      setLoading(false);
+      if (data) {
+        populateCashslideModificationFormWithData(data);
+      } else {
+        showMessage(`캐시슬라이드 수정 ID '${modId}'에 해당하는 데이터를 찾을 수 없습니다.`, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .getCashslideModificationDataById(modId);
+}
+
+/**
+ * '캐시슬라이드 수정 요청 스킵' 버튼 클릭 시 실행될 함수.
+ */
+function submitCashslideModificationSkip() {
+  const modId = document.getElementById('csModSkipId').value.trim();
+  if (!modId) {
+    showMessage('스킵할 캐시슬라이드 수정 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('csModSkipId').value = '';
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .processCashslideModificationSkip(modId);
+}
+
+/**
+ * '캐시슬라이드 수정 요청 반려' 버튼 클릭 시 실행될 함수.
+ */
+function submitCashslideModificationRejection() {
+  const modId = document.getElementById('csModRejectionId').value.trim();
+  const reason = document.getElementById('csModRejectionReason').value.trim();
+  if (!modId) {
+    showMessage('반려할 수정 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('csModRejectionId').value = '';
+        document.getElementById('csModRejectionReason').value = '';
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .processCashslideModificationRejection(modId, reason);
+}
+
+
+function validateLineLength(event, maxLength) {
+  const textarea = event.target;
+  const lines = textarea.value.split('\n');
+  let errorMessage = '';
+  let firstErrorLine = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].length > maxLength) {
+      errorMessage = `${i + 1}번째 줄이 ${maxLength}자를 초과했습니다. (${lines[i].length}/${maxLength}자)`;
+      firstErrorLine = i;
+      break; // 첫 번째 에러만 표시
+    }
+  }
+
+  // 에러 메시지 표시/숨김 처리
+  let errorDiv = textarea.nextElementSibling;
+  // 에러 메시지 div가 없거나 다음 요소가 div가 아니면 새로 생성
+  if (!errorDiv || errorDiv.tagName !== 'DIV' || !errorDiv.classList.contains('field-error-message')) {
+    errorDiv = document.createElement('div');
+    errorDiv.className = 'field-error-message';
+    textarea.parentNode.insertBefore(errorDiv, textarea.nextSibling);
+  }
+
+  errorDiv.textContent = errorMessage;
+  errorDiv.style.display = errorMessage ? 'block' : 'none';
+
+  return !errorMessage; // 유효하면 true, 아니면 false 반환
+}
+
+</script>

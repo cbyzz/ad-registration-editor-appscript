@@ -1,0 +1,2307 @@
+<script>
+  
+  function loadForm(type, subType, data = null) { // data 인자 추가
+  clearMessage();
+  const formId = 'adForm';
+  const formElement = document.getElementById(formId);
+  formElement.innerHTML = '';
+  if (!subType || !allFormFieldsData) return;
+
+  if (subType === '네이버페이 입점비') {
+    loadNaverPayEntryFeeForm(formId, data); // data 전달
+  } else {
+    const fieldInfo = allFormFieldsData[type] && allFormFieldsData[type][subType] ? allFormFieldsData[type][subType] : null;
+    const fields = fieldInfo ? fieldInfo.fields : [];
+    buildForm(formId, fields);
+  }
+}
+
+function loadNaverPayEntryFeeForm(formId, data) {
+  const form = document.getElementById(formId);
+  const shellFields = allFormFieldsData['광고']['네이버페이 입점비'].fields;
+  
+  // 1. 폼의 기본 골격을 생성합니다. (이 과정에서 flatpickr가 초기화되고 기본값이 설정됩니다)
+  buildForm(formId, shellFields);
+  
+  // 2. ▼▼▼▼▼ [수정] 폼 생성 직후, 7일 기간 제한 유효성 검사 로직을 실행합니다. ▼▼▼▼▼
+  setupEntryFeeDateValidation(form);
+  
+  const registrationToggleSelect = form.querySelector('[name="네이버페이 입점비 본 광고 신규 등록 여부"]');
+  const mainAdTypeSelectEl = form.querySelector('[name="본 광고 타입"]');
+  const mainAdTypeSelectGroup = mainAdTypeSelectEl.closest('.form-group');
+  
+  const dynamicFormContainer = document.createElement('div');
+  dynamicFormContainer.id = 'dynamicMainAdFormContainer';
+  mainAdTypeSelectGroup.insertAdjacentElement('afterend', dynamicFormContainer);
+
+  const handleMainAdFormVisibility = () => {
+    const shouldShowMainAdForm = registrationToggleSelect.value === '등록 O';
+    mainAdTypeSelectGroup.style.display = shouldShowMainAdForm ? 'block' : 'none';
+    dynamicFormContainer.style.display = shouldShowMainAdForm ? 'block' : 'none';
+    if (!shouldShowMainAdForm) {
+      mainAdTypeSelectEl.value = '';
+      dynamicFormContainer.innerHTML = '';
+    }
+  };
+
+  registrationToggleSelect.addEventListener('change', handleMainAdFormVisibility);
+
+  mainAdTypeSelectEl.addEventListener('change', function(event) {
+    const selectedType = event.target.value;
+    dynamicFormContainer.innerHTML = '';
+
+    if (selectedType) {
+      const fieldsToBuild = allFormFieldsData['광고'][selectedType].fields;
+      
+      const heading = document.createElement('h3');
+      heading.textContent = `${selectedType} 정보`;
+      heading.style.marginTop = '30px';
+      dynamicFormContainer.appendChild(heading);
+      
+      buildForm(dynamicFormContainer, fieldsToBuild, false);
+
+      if (data) {
+        fillForm(dynamicFormContainer, data);
+      }
+    }
+  });
+
+  handleMainAdFormVisibility();
+}
+
+
+  function createSearchableDropdown(field, optionsList) {
+    const container = document.createElement('div');
+    container.className = 'searchable-dropdown';
+
+    const hiddenInput = document.createElement('input');
+    hiddenInput.type = 'hidden';
+    hiddenInput.name = field.name;
+    hiddenInput.required = field.required;
+
+    const selectedValueInput = document.createElement('input');
+    selectedValueInput.type = 'text';
+    selectedValueInput.className = 'selected-value';
+    selectedValueInput.placeholder = '선택...';
+    selectedValueInput.readOnly = true;
+    
+    const optionsPanel = document.createElement('div');
+    optionsPanel.className = 'options-panel';
+
+    selectedValueInput.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // 다른 드롭다운이 열려있으면 닫기
+        document.querySelectorAll('.options-panel').forEach(panel => {
+            if (panel !== optionsPanel) panel.style.display = 'none';
+        });
+        const isVisible = optionsPanel.style.display === 'block';
+        optionsPanel.style.display = isVisible ? 'none' : 'block';
+        if (!isVisible) {
+            searchBox.value = ''; // 드롭다운 열 때 검색창 초기화
+            optionsListContainer.querySelectorAll('.option').forEach(opt => opt.style.display = ''); // 목록 초기화
+            searchBox.focus();
+        }
+    });
+
+    const searchBox = document.createElement('input');
+    searchBox.type = 'text';
+    searchBox.className = 'search-box';
+    searchBox.placeholder = '검색...';
+    searchBox.addEventListener('click', e => e.stopPropagation()); // 패널 닫힘 방지
+    searchBox.addEventListener('keyup', () => {
+        const filter = searchBox.value.toLowerCase();
+        optionsListContainer.querySelectorAll('.option').forEach(optionEl => {
+            const text = optionEl.textContent.toLowerCase();
+            optionEl.style.display = text.includes(filter) ? '' : 'none';
+        });
+    });
+
+    const optionsListContainer = document.createElement('ul');
+    optionsListContainer.className = 'options-list';
+    
+    optionsList.forEach(option => {
+        const optionEl = document.createElement('li');
+        optionEl.className = 'option';
+        optionEl.textContent = option;
+        optionEl.dataset.value = option;
+        optionEl.addEventListener('click', () => {
+            selectedValueInput.value = option;
+            hiddenInput.value = option;
+            optionsPanel.style.display = 'none';
+            // hidden input의 change 이벤트를 발생시켜 다른 로직에 알림
+            hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        optionsListContainer.appendChild(optionEl);
+    });
+
+    optionsPanel.appendChild(searchBox);
+    optionsPanel.appendChild(optionsListContainer);
+    container.appendChild(hiddenInput);
+    container.appendChild(selectedValueInput);
+    container.appendChild(optionsPanel);
+
+    return container;
+  }
+
+function buildForm(formId, fields, createFooter = true) {
+  const form = typeof formId === 'string' ? document.getElementById(formId) : formId;
+  if (createFooter) {
+    form.innerHTML = '';
+  }
+  const dependencies = [];
+  const pickersToInit = [];
+  let volumeOsCheckboxesCreated = false; // 물량 OS 선택 체크박스 생성 여부 플래그
+
+  const createVolumeSubField = function(baseName, subName) {
+      const id = baseName + '_' + subName;
+      const container = document.createElement('div');
+      container.className = 'volume-sub-field-container';
+      container.dataset.target = subName; // 어떤 OS 필드인지 식별하기 위한 속성
+      container.style.display = 'none'; // 기본적으로 숨김 처리 (오류 수정)
+      container.style.alignItems = 'center';
+      container.style.marginBottom = '5px';
+
+      const subLabel = document.createElement('label');
+      subLabel.textContent = subName;
+      subLabel.style.width = '50px';
+      subLabel.style.flexShrink = '0';
+      container.appendChild(subLabel);
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.name = id;
+      input.id = id;
+      input.style.flexGrow = '1';
+      container.appendChild(input);
+
+      const unlimitedLabel = document.createElement('label');
+      unlimitedLabel.style.marginLeft = '10px';
+      unlimitedLabel.style.whiteSpace = 'nowrap';
+      const unlimitedCheckbox = document.createElement('input');
+      unlimitedCheckbox.type = 'checkbox';
+      unlimitedLabel.appendChild(unlimitedCheckbox);
+      unlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+      container.appendChild(unlimitedLabel);
+
+      unlimitedCheckbox.addEventListener('change', function() {
+          if (unlimitedCheckbox.checked) {
+              input.value = '무제한';
+              input.readOnly = true;
+          } else {
+              if (input.value === '무제한') {
+                  input.value = '';
+              }
+              input.readOnly = false;
+          }
+      });
+      return container;
+  };
+
+  fields.forEach(function(field) {
+      const group = document.createElement('div');
+      group.className = 'form-group';
+      let label = document.createElement('label');
+
+      if (field.type === 'heading') {
+          const h = document.createElement('h3');
+          h.textContent = field.label;
+          h.style.marginTop = '40px';
+          h.style.borderBottom = '2px solid #007bff';
+          h.style.paddingBottom = '10px';
+          h.style.marginBottom = '20px';
+          form.appendChild(h);
+          return;
+      }
+
+      if (field.type !== 'group_checkbox' && field.type !== 'checkbox-text-hybrid' && field.type !== 'volume_split' && field.type !== 'media_key_split') {
+          label.textContent = field.label || field.name;
+      }
+      if (field.required) {
+          label.className = 'required';
+      }
+      
+      let elementToAppend = null;
+
+      if (field.type === 'select' && (field.optionsKey === 'advertisers' || field.optionsKey === 'clients')) {
+          const optionsList = allFormFieldsData.dropdowns[field.optionsKey] || [];
+          elementToAppend = createSearchableDropdown(field, optionsList);
+      } else {
+          if (field.type === 'volume_split') {
+              const mainLabel = document.createElement('label');
+              mainLabel.textContent = field.name;
+              if (field.required) mainLabel.className = 'required';
+              group.appendChild(mainLabel);
+
+              if (!volumeOsCheckboxesCreated) {
+                  const osSelectorGroup = document.createElement('div');
+                  osSelectorGroup.className = 'checkbox-group';
+                  osSelectorGroup.id = 'volume-os-selector';
+                  osSelectorGroup.style.marginBottom = '10px';
+
+                  const hiddenInput = document.createElement('input');
+                  hiddenInput.type = 'hidden';
+                  hiddenInput.name = '물량 OS 선택';
+                  osSelectorGroup.appendChild(hiddenInput);
+
+                  ['통합', 'AOS', 'IOS'].forEach(os => {
+                      const checkLabel = document.createElement('label');
+                      const checkbox = document.createElement('input');
+                      checkbox.type = 'checkbox';
+                      checkbox.dataset.target = os;
+                      checkLabel.appendChild(checkbox);
+                      checkLabel.appendChild(document.createTextNode(` ${os}`));
+                      osSelectorGroup.appendChild(checkLabel);
+                  });
+                  group.appendChild(osSelectorGroup);
+                  volumeOsCheckboxesCreated = true;
+              }
+
+              const errorDiv = document.createElement('div');
+              errorDiv.id = field.name + '_error';
+              errorDiv.className = 'field-error-message';
+              errorDiv.style.display = 'none';
+              group.appendChild(errorDiv);
+
+              const subFieldsContainer = document.createElement('div');
+              subFieldsContainer.style.border = '1px solid #e0e0e0';
+              subFieldsContainer.style.padding = '10px';
+              subFieldsContainer.style.borderRadius = '4px';
+              subFieldsContainer.appendChild(createVolumeSubField(field.name, '통합'));
+              subFieldsContainer.appendChild(createVolumeSubField(field.name, 'AOS'));
+              subFieldsContainer.appendChild(createVolumeSubField(field.name, 'IOS'));
+              elementToAppend = subFieldsContainer;
+          } else if (field.type === 'media_key_split') {
+              const mainLabel = document.createElement('label');
+              mainLabel.id = 'media_key_main_label';
+              mainLabel.textContent = field.name;
+              if (field.required) mainLabel.className = 'required';
+              group.appendChild(mainLabel);
+              const subFieldsContainer = document.createElement('div');
+              subFieldsContainer.style.border = '1px solid #e0e0e0';
+              subFieldsContainer.style.padding = '10px';
+              subFieldsContainer.style.borderRadius = '4px';
+              const createMediaKeySubField = (subName, labelText) => {
+                  const id = '매체키_' + subName;
+                  const container = document.createElement('div');
+                  container.id = 'media_key_group_' + subName;
+                  container.style.display = 'flex';
+                  container.style.alignItems = 'center';
+                  container.style.marginBottom = '5px';
+                  const subLabel = document.createElement('label');
+                  subLabel.textContent = labelText;
+                  subLabel.style.width = '50px';
+                  subLabel.style.flexShrink = '0';
+                  container.appendChild(subLabel);
+                  const input = document.createElement('input');
+                  input.type = 'text';
+                  input.name = id;
+                  input.id = id;
+                  input.style.flexGrow = '1';
+                  container.appendChild(input);
+                  return container;
+              };
+              subFieldsContainer.appendChild(createMediaKeySubField('기본', '기본'));
+              subFieldsContainer.appendChild(createMediaKeySubField('AOS', 'AOS'));
+              subFieldsContainer.appendChild(createMediaKeySubField('IOS', 'IOS'));
+              subFieldsContainer.appendChild(createMediaKeySubField('PC', 'PC'));
+              elementToAppend = subFieldsContainer;
+
+              label = null; 
+          } else if (field.type === 'group_checkbox') {
+              const checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+              checkbox.name = field.name;
+              checkbox.id = field.name;
+              checkbox.value = 'TRUE';
+              if (field.defaultValue) checkbox.checked = true;
+              label.appendChild(checkbox);
+              label.appendChild(document.createTextNode(' ' + field.label));
+              elementToAppend = label;
+              label = null;
+          } else if (field.type === 'checkbox-text-hybrid') {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'input-wrapper';
+              const checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+              const textInput = document.createElement('input');
+              textInput.type = 'text';
+              textInput.name = field.name;
+              textInput.style.display = 'none';
+              textInput.required = field.required;
+              if (field.subfieldDefault) textInput.value = field.subfieldDefault;
+
+              checkbox.addEventListener('change', function() {
+                  textInput.style.display = checkbox.checked ? 'inline-block' : 'none';
+                  textInput.required = checkbox.checked && field.required;
+                  if (checkbox.checked && field.copyFrom) {
+                      const sourceInput = form.querySelector(`[name="${field.copyFrom}"]`);
+                      if (sourceInput) {
+                          textInput.value = sourceInput.value;
+                      }
+                  }
+              });
+
+              const checkLabel = document.createElement('label');
+              checkLabel.appendChild(checkbox);
+              checkLabel.appendChild(document.createTextNode(' ' + field.label));
+
+              wrapper.appendChild(checkLabel);
+              wrapper.appendChild(textInput);
+              elementToAppend = wrapper;
+              label = null;
+          } else if (field.type === 'datetime-local' || field.type === 'datetime-local-unlimited') {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'input-wrapper';
+              const pickerInput = document.createElement('input');
+              pickerInput.type = 'text';
+              pickerInput.placeholder = "클릭하여 선택...";
+              pickerInput.dataset.pickerType = 'datetime';
+              pickerInput.dataset.name = field.name;
+              const hiddenInput = document.createElement('input');
+              hiddenInput.type = 'hidden';
+              hiddenInput.name = field.name;
+              if (field.required) {
+                  hiddenInput.required = true;
+                  pickerInput.required = true;
+              }
+              pickersToInit.push({ input: pickerInput, hidden: hiddenInput });
+              wrapper.appendChild(pickerInput);
+              if (field.type === 'datetime-local-unlimited') {
+                  const unlimitedLabel = document.createElement('label');
+                  const unlimitedCheckbox = document.createElement('input');
+                  unlimitedCheckbox.type = 'checkbox';
+                  unlimitedLabel.appendChild(unlimitedCheckbox);
+                  unlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+                  unlimitedCheckbox.onchange = function() {
+                      const fp = pickerInput._flatpickr;
+                      pickerInput.disabled = unlimitedCheckbox.checked;
+                      if (unlimitedCheckbox.checked) {
+                          fp.clear();
+                          pickerInput.value = '무제한';
+                          hiddenInput.value = '무제한';
+                          pickerInput.required = false;
+                          hiddenInput.required = false;
+                      } else {
+                          pickerInput.required = field.required;
+                          hiddenInput.required = field.required;
+                          fp.setDate(fp.now, true);
+                      }
+                  };
+                  wrapper.appendChild(unlimitedLabel);
+              }
+              group.appendChild(hiddenInput);
+              elementToAppend = wrapper;
+          } else if (field.type === 'checkbox') {
+              const container = document.createElement('div');
+              container.className = 'checkbox-group';
+              const hiddenInput = document.createElement('input');
+              hiddenInput.type = 'hidden';
+              hiddenInput.name = field.name;
+              const allLabel = document.createElement('label');
+              const allCheckbox = document.createElement('input');
+              allCheckbox.type = 'checkbox';
+              allLabel.appendChild(allCheckbox);
+              allLabel.appendChild(document.createTextNode(' 전체'));
+              if (field.required) {
+                  allCheckbox.required = true;
+              }
+              const optionCheckboxes = [];
+              field.options.forEach(function(opt) {
+                  const optLabel = document.createElement('label');
+                  const optCheckbox = document.createElement('input');
+                  optCheckbox.type = 'checkbox';
+                  optCheckbox.value = opt;
+                  optLabel.appendChild(optCheckbox);
+                  optLabel.appendChild(document.createTextNode(' ' + opt));
+                  optionCheckboxes.push(optCheckbox);
+                  container.appendChild(optLabel);
+              });
+              const updateHiddenValue = function() {
+                  const selectedValues = optionCheckboxes.filter(cb => cb.checked).map(cb => cb.value);
+                  allCheckbox.checked = selectedValues.length === optionCheckboxes.length;
+                  hiddenInput.value = allCheckbox.checked ? '전체' : selectedValues.join(',');
+                  if (field.required) {
+                      allCheckbox.required = !hiddenInput.value;
+                  }
+              };
+              allCheckbox.onchange = function() {
+                  optionCheckboxes.forEach(cb => { cb.checked = allCheckbox.checked; });
+                  updateHiddenValue();
+              };
+              optionCheckboxes.forEach(cb => cb.addEventListener('change', updateHiddenValue));
+              container.prepend(allLabel);
+              group.appendChild(hiddenInput);
+              elementToAppend = container;
+          } else if (field.type === 'number-unlimited') {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'input-wrapper';
+              const numberInput = document.createElement('input');
+              numberInput.type = 'number';
+
+              numberInput.id = `num-input-${field.name}`; 
+
+              numberInput.required = field.required;
+              const hiddenInput = document.createElement('input');
+              hiddenInput.type = 'hidden';
+              hiddenInput.name = field.name;
+              numberInput.addEventListener('input', () => { hiddenInput.value = numberInput.value; });
+              wrapper.appendChild(numberInput);
+              const unlimitedLabel = document.createElement('label');
+              const unlimitedCheckbox = document.createElement('input');
+              unlimitedCheckbox.type = 'checkbox';
+
+              unlimitedCheckbox.id = `unlimited-cb-${field.name}`;
+
+              const currentAdType = document.getElementById('adType') ? document.getElementById('adType').value : '';
+              if (currentAdType === '완전 정률 - 쿠키오븐 스마트스토어 CPS' && field.name === '총물량') {
+                  unlimitedCheckbox.checked = true;
+                  numberInput.disabled = true;
+                  hiddenInput.value = '무제한'; // 숨겨진 필드 값도 '무제한'으로 초기화
+              }
+
+              unlimitedLabel.appendChild(unlimitedCheckbox);
+              unlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+              unlimitedCheckbox.addEventListener('change', function() {
+                  numberInput.disabled = unlimitedCheckbox.checked;
+                  numberInput.required = !unlimitedCheckbox.checked && field.required;
+                  if (unlimitedCheckbox.checked) {
+                      numberInput.value = '';
+                      hiddenInput.value = '무제한';
+                  } else {
+                      hiddenInput.value = numberInput.value;
+                  }
+              });
+              wrapper.appendChild(unlimitedLabel);
+              group.appendChild(hiddenInput);
+              elementToAppend = wrapper;
+          } else if (field.type === 'text-unlimited') {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'input-wrapper';
+              const textInput = document.createElement('input');
+              textInput.type = 'text';
+              textInput.required = field.required;
+              const hiddenInput = document.createElement('input');
+              hiddenInput.type = 'hidden';
+              hiddenInput.name = field.name;
+              textInput.addEventListener('input', () => { hiddenInput.value = textInput.value; });
+              wrapper.appendChild(textInput);
+              const unlimitedLabel = document.createElement('label');
+              const unlimitedCheckbox = document.createElement('input');
+              unlimitedCheckbox.type = 'checkbox';
+              unlimitedLabel.appendChild(unlimitedCheckbox);
+              unlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+              unlimitedCheckbox.addEventListener('change', function() {
+                  textInput.disabled = unlimitedCheckbox.checked;
+                  textInput.required = !unlimitedCheckbox.checked && field.required;
+                  if (unlimitedCheckbox.checked) {
+                      textInput.value = '';
+                      hiddenInput.value = '무제한';
+                  } else {
+                      hiddenInput.value = textInput.value;
+                  }
+              });
+              wrapper.appendChild(unlimitedLabel);
+              group.appendChild(hiddenInput);
+              elementToAppend = wrapper;
+          } else if (field.type === 'textarea') {
+              const textarea = document.createElement('textarea');
+              textarea.name = field.name;
+              textarea.required = field.required;
+              if (field.rows) textarea.rows = field.rows;
+              if (field.defaultValue) textarea.value = field.defaultValue;
+              if (field.readonly) textarea.readOnly = true;
+              elementToAppend = textarea;
+          } else {
+              const inputElement = document.createElement(field.type === 'select' ? 'select' : 'input');
+              if (field.type !== 'select') {
+                  inputElement.type = field.type || 'text';
+              } else {
+                  let optionsHtml = '<option value="">선택...</option>';
+                  if (field.optionsKey) {
+                      const optionsList = allFormFieldsData.dropdowns[field.optionsKey] || [];
+                      optionsHtml += optionsList.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+                  } else if (field.options) {
+                      optionsHtml += field.options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+                  }
+                  inputElement.innerHTML = optionsHtml;
+              }
+              inputElement.name = field.name;
+              inputElement.required = field.required;
+              if (field.placeholder) inputElement.placeholder = field.placeholder;
+              if (field.defaultValue) inputElement.value = field.defaultValue;
+              if (field.readonly) inputElement.readOnly = true;
+              if (field.step) inputElement.step = field.step;
+              elementToAppend = inputElement;
+          }
+      }
+
+      if (label && elementToAppend) {
+          group.appendChild(label);
+          group.appendChild(elementToAppend);
+      } else if (elementToAppend) {
+          group.appendChild(elementToAppend);
+      }
+
+      if (field.name === '액션명') {
+          const desc = document.createElement('div');
+          desc.className = 'description';
+          desc.id = 'actionNameDesc';
+          group.appendChild(desc);
+      }
+
+      form.appendChild(group);
+
+    if (field.name === '미션 정보 붙여넣기') {
+      const previewDiv = document.createElement('div');
+      previewDiv.id = 'missionPreviewTableContainer';
+      // 미리보기 컨테이너 자체를 form의 직계 자식으로 만듭니다.
+      // 다른 필드와의 간격을 위해 form-group 클래스를 부여해 일관성을 유지합니다.
+      previewDiv.className = 'form-group'; 
+      form.appendChild(previewDiv);
+    }
+
+      if (field.dependency) {
+          dependencies.push({
+              targetField: field.name,
+              ...field.dependency
+          });
+      }
+  });
+
+  // ▼▼▼▼▼ [추가] volume_split 체크박스에 대한 이벤트 리스너를 추가합니다. ▼▼▼▼▼
+  const volumeOsSelector = form.querySelector('#volume-os-selector');
+  if (volumeOsSelector) {
+      const checkboxes = volumeOsSelector.querySelectorAll('input[type="checkbox"]');
+      const hiddenInput = volumeOsSelector.querySelector('input[type="hidden"]');
+      
+      checkboxes.forEach(cb => {
+          cb.addEventListener('change', () => {
+              const targetName = cb.dataset.target;
+              
+              const containersToToggle = form.querySelectorAll(`.volume-sub-field-container[data-target="${targetName}"]`);
+              containersToToggle.forEach(container => {
+                  container.style.display = cb.checked ? 'flex' : 'none';
+              });
+
+              const selected = Array.from(checkboxes).filter(i => i.checked).map(i => i.dataset.target);
+              hiddenInput.value = selected.join(',');
+          });
+      });
+  }
+
+  dependencies.forEach(function(dep) {
+    const sourceElement = form.querySelector('[name="' + dep.field + '"]');
+    const targetElement = form.querySelector('[name="' + dep.targetField + '"]');
+    if (sourceElement && targetElement) {
+      const handleDependency = function() {
+        const parentGroup = targetElement.closest('.form-group');
+        if (!parentGroup) return;
+
+
+
+
+        let isHidden = true;
+
+        if (dep.showsOn !== undefined) {
+          if (sourceElement.type === 'checkbox') {
+            isHidden = (sourceElement.checked !== dep.showsOn);
+          } else if (Array.isArray(dep.showsOn)) {
+            isHidden = !dep.showsOn.includes(sourceElement.value);
+          } else {
+            isHidden = (sourceElement.value !== dep.showsOn);
+          }
+        } else if (dep.hidesOn) {
+          if (Array.isArray(dep.hidesOn)) {
+            isHidden = dep.hidesOn.includes(sourceElement.value);
+          } else {
+            isHidden = (sourceElement.value === dep.hidesOn);
+          }
+        } else {
+          isHidden = false;
+        }
+
+        parentGroup.style.display = isHidden ? 'none' : 'block';
+        Array.from(parentGroup.querySelectorAll('input, select, textarea')).forEach(function(el) { el.disabled = isHidden; });
+      };
+
+
+
+      
+      sourceElement.addEventListener('change', handleDependency);
+      sourceElement.addEventListener('keyup', handleDependency);
+      handleDependency();
+    }
+  });
+
+  setupAutoCalculations(form);
+  setupFixedRateCpsListeners(form);
+
+  setupAdvertiserCategoryListeners(form);
+
+  const currentAdType = document.getElementById('adType').value;
+  const adTypesWithMediumListeners = ['CPA S2S', 'CPI', 'CPA TRACKER', 'CPA SUBSCRIBE', 'CPC', '애드네트워크 연동형'];
+  if (adTypesWithMediumListeners.includes(currentAdType)) {
+    setupMediumListeners(form);
+  }
+
+  const adTypesWithOsListeners = ['CPA S2S', 'CPA TRACKER', 'CPA SUBSCRIBE', 'CPC', '애드네트워크 연동형'];
+  if (adTypesWithOsListeners.includes(currentAdType)) {
+    setupOsListeners(form);
+  }
+
+  if (currentAdType === '애드네트워크 연동형') {
+    setupAdNetworkListeners(form);
+  }
+  if (currentAdType === '네이버페이 알림받기') {
+    setupNaverPayNotificationListeners(form);
+  }
+  if (currentAdType === '네이버페이 스마트스토어 CPS') {
+    setupNaverCpsListeners(form);
+  }
+  if (currentAdType === '네이버페이 CPS구매확정형_금액X') {
+    setupNaverCpsDecidedListeners(form);
+  }
+  if (currentAdType === '쿠키오븐 스마트스토어 CPS') {
+    setupCookieOvenCpsListeners(form);
+  }
+  if (currentAdType === 'CPQ') {
+    setupCpqListeners(form);
+  }
+
+
+    if (currentAdType === '멀티미션') {
+    setupMultiRewardListeners(form);
+  }
+  
+  if (createFooter) {
+    const existingFooter = document.querySelector('.sticky-footer');
+    if (existingFooter) {
+      existingFooter.remove();
+    }
+
+    const footer = document.createElement('div');
+    footer.className = 'sticky-footer';
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'button';
+    submitBtn.className = 'submit-btn';
+    submitBtn.textContent = '등록 요청';
+    submitBtn.onclick = function() { openConfirmationModal(typeof formId === 'string' ? formId : form.id); };
+    footer.appendChild(submitBtn);
+    document.body.appendChild(footer);
+  }
+
+  pickersToInit.forEach(function(pickerData) {
+    const isObject = typeof pickerData === 'object' && pickerData.input;
+    const input = isObject ? pickerData.input : pickerData;
+    const hidden = isObject ? pickerData.hidden : null;
+    const pickerType = input.dataset.pickerType;
+    const fieldName = input.dataset.name;
+    const adType = document.getElementById('adType').value;
+    let config = {
+      onChange: [],
+      onReady: []
+    };
+    if (pickerType.includes('datetime')) {
+      config.enableTime = true;
+      config.dateFormat = "Y-m-d H:i";
+      config.time_24hr = true;
+
+      const updateHiddenInputValue = function(selectedDates, dateStr) {
+        if (hidden && dateStr) {
+          hidden.value = dateStr;
+          hidden.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      };
+
+      config.onChange.push(updateHiddenInputValue);
+      config.onReady.push(updateHiddenInputValue);
+
+      config.onChange.push(() => {
+          if (form.autoCalculateCombinedVolumes) {
+              setTimeout(() => form.autoCalculateCombinedVolumes(), 0);
+          }
+      });
+
+      if (fieldName.includes('광고 집행 시작')) {
+        config.defaultDate = new Date().setHours(0, 0, 0, 0);
+      } else if (fieldName.includes('광고 집행 종료')) {
+        config.defaultDate = new Date().setHours(23, 59, 0, 0);
+      }
+      if (adType === '네이버페이 스마트스토어 CPS' && fieldName === '광고 집행 종료') {
+        const sub1BottomInput = form.querySelector('[name="문구 - 서브1 하단"]');
+        const updateEndDateText = function(selectedDates) {
+          if (sub1BottomInput && selectedDates.length > 0) {
+            const date = selectedDates[0];
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            sub1BottomInput.value = '매일 선착순 ' + month + '/' + day + ' 까지';
+          } else if (sub1BottomInput) {
+            let originalPlaceholder = '';
+            if (allFormFieldsData && allFormFieldsData['광고'] && allFormFieldsData['광고']['네이버페이 스마트스토어 CPS'] && allFormFieldsData['광고']['네이버페이 스마트스토어 CPS'].fields) {
+              const fieldDefinition = allFormFieldsData['광고']['네이버페이 스마트스토어 CPS'].fields.find(function(f) { return f.name === '문구 - 서브1 하단'; });
+              if (fieldDefinition && fieldDefinition.placeholder) {
+                originalPlaceholder = fieldDefinition.placeholder;
+              }
+            }
+            sub1BottomInput.value = '';
+            sub1BottomInput.placeholder = originalPlaceholder;
+          }
+        };
+        config.onChange.push(updateEndDateText);
+          config.onReady.push(updateEndDateText);
+      }
+    }
+    flatpickr(input, config);
+  });
+  
+  setupUrlDependencies(form);
+
+
+  const fieldsToValidate = ['문구 - 타이틀', '문구 - 서브', '문구 - 서브1 상단', '문구 - 서브2'];
+  fieldsToValidate.forEach(fieldName => {
+    const inputElement = form.querySelector(`[name="${fieldName}"]`);
+    if (inputElement) {
+      inputElement.addEventListener('input', validateAndCleanInput);
+    }
+  });
+}
+
+
+function buildModificationRequestForm() {
+    const container = document.getElementById('modificationFieldsContainer');
+    container.innerHTML = '';
+
+    const fields = [
+        { name: '광고주 연동 토큰 값', type: 'text' },
+        { name: '매체', type: 'textarea', rows: 3 },
+        { name: '단가', type: 'text' },
+        { name: '총물량', type: 'textarea', rows: 3 },
+        { name: '리워드', type: 'textarea', rows: 3 },
+        { name: '일물량', type: 'textarea', rows: 3 },
+        { name: '광고 집행 시작 일시', type: 'datetime-local' },
+        { name: '광고 집행 종료 일시', type: 'datetime-local-unlimited' },
+        { name: '광고 노출 중단 시작일시', type: 'datetime-local' },
+        { name: '광고 노출 중단 종료일시', type: 'datetime-local-unlimited' },
+        { name: '광고 참여 시작 후 완료 인정 유효기간 (일단위)', type: 'text' },
+        { name: '트래커', type: 'text' },
+        { name: '완료 이벤트 이름', type: 'text' },
+        { name: '트래커 추가 정보 입력', type: 'textarea', rows: 3 },
+        { name: 'URL - 기본', type: 'text' },
+        { name: 'URL - AOS', type: 'text' },
+        { name: 'URL - IOS', type: 'text' },
+        { name: 'URL - PC', type: 'text' },
+        // ▼▼▼▼▼ [추가] 요청하신 신규 URL 필드 그룹 ▼▼▼▼▼
+        { 
+            name: 'URL - 네이버페이 CPC 전용', 
+            type: 'group_checkbox',
+            subFields: [
+                { name: '기본 URL', type: 'text', required: true },
+                { name: '상세전용랜딩 URL', type: 'text', required: true }
+            ] 
+        },
+        // ▲▲▲▲▲ [추가] ▲▲▲▲▲
+        { name: '소재 경로', type: 'textarea', rows: 3 },
+        { name: '적용 필요 항목', type: 'text' },
+        { name: '라이브 시작 시간', type: 'text', defaultValue: '00:00' },
+        { name: '라이브 종료 시간', type: 'text', defaultValue: '24:00' },
+        { name: 'adid 타겟팅 모수파일', type: 'text' },
+        { name: '데모타겟1', type: 'text' },
+        { name: '데모타겟2', type: 'text' },
+        { name: '2차 액션 팝업 사용', type: 'select', options: ['FALSE', 'TRUE'], subFields: [
+            { name: '2차 액션 팝업 이미지 링크', type: 'text', required: true },
+            { name: '2차 액션 팝업 타이틀', type: 'text', required: true },
+            { name: '2차 액션 팝업 액션 버튼명', type: 'text', required: true },
+            { name: '2차 액션 팝업 랜딩 URL', type: 'text', required: true }
+          ]
+        },
+        { name: '문구 - 타이틀', type: 'text' },
+        { name: '문구 - 서브', type: 'text' },
+        { name: '문구 - 상세화면 상단 타이틀', type: 'text' },
+        { name: '문구 - 서브1 상단', type: 'text' },
+        { name: '문구 - 서브1 하단', type: 'text' },
+        { name: '액션 버튼', type: 'text' },
+        { name: '문구 - 서브2', type: 'textarea', rows: 3 },
+        { name: '노출 대상', type: 'select', options: ['모든 사용자', '테스트 사용자'] },
+        { name: '기타', type: 'textarea', rows: 3 },
+        { name: '광고 타입별 추가', type: 'select-adType', options: ['쿠키오븐 스마트스토어 CPS', '네이버페이 알림받기', '네이버페이 스마트스토어 CPS', 'CPQ', 'CPA SUBSCRIBE'] }
+    ];
+
+    fields.forEach(field => {
+        const group = document.createElement('div');
+        group.className = 'checkbox-field-group';
+
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `mod-check-${field.name}`;
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(` ${field.name}`));
+        group.appendChild(label);
+        
+        const fieldContainer = document.createElement('div');
+        fieldContainer.className = 'modification-field form-group';
+        fieldContainer.id = `mod-field-${field.name}`;
+        fieldContainer.style.marginBottom = '0';
+        
+        let element;
+        if (field.type === 'group_checkbox' && field.subFields) {
+            const subContainer = document.createElement('div');
+            subContainer.style.paddingLeft = '20px';
+            field.subFields.forEach(sub => {
+                const subGroup = document.createElement('div');
+                subGroup.className = 'form-group';
+                const subLabel = document.createElement('label');
+                subLabel.textContent = sub.name;
+                if (sub.required) subLabel.classList.add('required');
+                
+                const subInput = document.createElement('input');
+                subInput.type = sub.type;
+                subInput.name = sub.name;
+
+                subGroup.appendChild(subLabel);
+                subGroup.appendChild(subInput);
+                subContainer.appendChild(subGroup);
+
+                if (sub.name === '기본 URL') {
+                    subInput.addEventListener('input', () => {
+                        const detailUrlInput = subContainer.querySelector('[name="상세전용랜딩 URL"]');
+                        if (detailUrlInput) detailUrlInput.value = subInput.value;
+                    });
+                }
+            });
+            fieldContainer.appendChild(subContainer);
+            element = null;
+        } else {
+            switch(field.type) {
+                case 'textarea':
+                    element = document.createElement('textarea');
+                    element.rows = field.rows || 3;
+                    break;
+                case 'datetime-local':
+                    element = document.createElement('input');
+                    element.type = 'text';
+                    element.placeholder = '날짜와 시간을 선택하세요';
+                    element.name = field.name;  
+                    fieldContainer.appendChild(element);
+const config = { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true };
+                    if (field.name === '광고 집행 시작 일시') {
+                        config.defaultDate = new Date().setHours(0, 0, 0, 0);
+                    } else if (field.name === '광고 노출 중단 시작일시') { // <<-- 추가된 부분
+                    config.defaultDate = new Date().setHours(23, 59, 0, 0); // <<-- 추가된 부분
+                } 
+                    flatpickr(element, config);
+                    element = null;
+                    break;
+                case 'datetime-local-unlimited':
+                    const dtWrapper = document.createElement('div');
+                    dtWrapper.className = 'input-wrapper';
+                    const dtInput = document.createElement('input');
+                    dtInput.type = 'text';
+                    dtInput.placeholder = '날짜와 시간을 선택하세요';
+                    dtInput.name = field.name;
+
+                    const dtUnlimitedCheck = document.createElement('input');
+                    dtUnlimitedCheck.type = 'checkbox';
+                    dtUnlimitedCheck.style.marginLeft = '10px';
+
+                    const dtUnlimitedLabel = document.createElement('label');
+                    dtUnlimitedLabel.style.fontWeight = 'normal';
+                    dtUnlimitedLabel.appendChild(dtUnlimitedCheck);
+                    dtUnlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+
+                    dtWrapper.appendChild(dtInput);
+                    dtWrapper.appendChild(dtUnlimitedLabel);
+                    fieldContainer.appendChild(dtWrapper);
+
+                    const dtFlatpickrConfig = { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true };
+                    if (field.name === '광고 집행 종료 일시') {
+                        dtFlatpickrConfig.defaultDate = new Date().setHours(23, 59, 0, 0);
+                    }else if (field.name === '광고 노출 중단 종료일시') { // <<-- 추가된 부분
+                    dtFlatpickrConfig.defaultDate = new Date().setHours(0, 0, 0, 0);  // <<-- 추가된 부분
+                }
+                    flatpickr(dtInput, dtFlatpickrConfig);
+
+                    dtUnlimitedCheck.onchange = () => {
+                        if (dtUnlimitedCheck.checked) {
+                            if (dtInput._flatpickr) dtInput._flatpickr.destroy();
+                            dtInput.value = "무제한";
+                            dtInput.disabled = true;
+                        } else {
+                            dtInput.disabled = false;
+                            dtInput.value = "";
+                            flatpickr(dtInput, dtFlatpickrConfig);
+                        }
+                    };
+                    element = null;
+                    break;
+                case 'select':
+                    element = document.createElement('select');
+                    element.innerHTML = `<option value="">선택</option>` + field.options.map(o => `<option value="${o}">${o}</option>`).join('');
+                    if (field.subFields) {
+                        const subContainer = document.createElement('div');
+                        subContainer.id = `mod-subfield-${field.name}`;
+                        subContainer.style.display = 'none';
+                        subContainer.style.paddingLeft = '20px';
+                        field.subFields.forEach(sub => {
+                            const subGroup = document.createElement('div');
+                            subGroup.className = 'form-group';
+                            const subLabel = document.createElement('label');
+                            subLabel.textContent = sub.name;
+                            if (sub.required) subLabel.classList.add('required');
+                            const subInput = document.createElement('input');
+                            subInput.type = sub.type;
+                            subInput.name = sub.name;
+                            subGroup.appendChild(subLabel);
+                            subGroup.appendChild(subInput);
+                            subContainer.appendChild(subGroup);
+                        });
+                        fieldContainer.appendChild(subContainer);
+                        element.onchange = (e) => {
+                            const show = e.target.value === 'TRUE';
+                            subContainer.style.display = show ? 'block' : 'none';
+                            subContainer.querySelectorAll('input').forEach(i => i.required = show);
+                        };
+                    }
+                    break;
+                case 'select-adType':
+                    const selectElement = document.createElement('select');
+                    selectElement.name = field.name;
+                    selectElement.innerHTML = `<option value="">광고 타입 선택</option>` + field.options.map(o => `<option value="${o}">${o}</option>`).join('');
+                    
+                    const adTypeSpecificContainer = document.createElement('div');
+                    adTypeSpecificContainer.id = 'adTypeSpecificContainer';
+                    adTypeSpecificContainer.style.marginTop = '15px';
+                    
+                    selectElement.onchange = (e) => {
+                        buildAdTypeSpecificModificationFields(e.target.value, adTypeSpecificContainer);
+                    };
+                    
+                    fieldContainer.appendChild(selectElement);
+                    fieldContainer.appendChild(adTypeSpecificContainer);
+                    element = null;
+                    break;
+                default:
+                    element = document.createElement('input');
+                    element.type = field.type;
+            }
+
+            if(element) {
+                element.name = field.name;
+                if(field.defaultValue) element.value = field.defaultValue;
+                fieldContainer.appendChild(element);
+            }
+        }
+
+        group.appendChild(fieldContainer);
+        container.appendChild(group);
+
+        checkbox.onchange = () => {
+            fieldContainer.style.display = checkbox.checked ? 'block' : 'none';
+        };
+    });
+  }
+
+
+
+
+
+function buildAdTypeSpecificModificationFields(adType, container) {
+    container.innerHTML = ''; // 컨테이너 초기화
+    if (!adType) return;
+
+    const formBuilder = {
+      createGroup: function(labelText, isRequired = false) {
+        const group = document.createElement('div');
+        group.className = 'form-group';
+        const label = document.createElement('label');
+        label.textContent = labelText;
+        if (isRequired) label.className = 'required';
+        group.appendChild(label);
+        return group;
+      },
+      createInput: function(name, type = 'text', isRequired = false, placeholder = '') {
+        const input = document.createElement('input');
+        input.type = type;
+        input.name = name;
+        input.required = isRequired;
+        if (placeholder) input.placeholder = placeholder;
+        return input;
+      },
+      createSelect: function(name, options, defaultValue = '', isRequired = false) {
+        const select = document.createElement('select');
+        select.name = name;
+        select.required = isRequired;
+        select.innerHTML = `<option value="">선택</option>` + options.map(o => `<option value="${o.value}" ${o.value === defaultValue ? 'selected' : ''}>${o.text}</option>`).join('');
+        return select;
+      },
+      createTextarea: function(name, rows = 3, isRequired = false, placeholder = '') {
+        const textarea = document.createElement('textarea');
+        textarea.name = name;
+        textarea.rows = rows;
+        textarea.required = isRequired;
+        if (placeholder) textarea.placeholder = placeholder;
+        return textarea;
+      },
+      createCheckboxGroup: function(name, options, isRequired = false) {
+        const div = document.createElement('div');
+        div.className = 'checkbox-group';
+        options.forEach(opt => {
+          const label = document.createElement('label');
+          label.style.display = 'block'; // 각 항목을 블록 요소로 만들어 줄바꿈
+        label.style.marginBottom = '8px'; // 항목 간의 상하 간격 추가
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.name = name;
+          checkbox.value = opt.value;
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode(' ' + opt.text));
+          div.appendChild(label);
+        });
+        return div;
+      },
+      createHeading: function(text) {
+        const h4 = document.createElement('h4');
+        h4.textContent = text;
+        h4.style.marginTop = '20px';
+        h4.style.borderBottom = '1px solid #ccc';
+        h4.style.paddingBottom = '5px';
+        return h4;
+      }
+    };
+
+    let group, element;
+
+    switch (adType) {
+      case '쿠키오븐 스마트스토어 CPS':
+        group = formBuilder.createGroup('최소 결제 금액');
+        element = formBuilder.createInput('쿠키오븐 CPS_최소 결제 금액');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('파트너 광고주 타입');
+        element = formBuilder.createSelect('쿠키오븐 CPS_파트너 광고주 타입', [{
+          value: 'ARRIVAL_GUARANTEE',
+          text: '도착보장 상품 구매 (ARRIVAL_GUARANTEE)'
+        }, {
+          value: 'NORMAL_SELLER',
+          text: '스스 / 브스 특정 판매자 상품 구매 (NORMAL_SELLER)'
+        }, {
+          value: 'ARRIVAL_GUARANTEE_SELLER',
+          text: '도착보장 내 특정 판매자 상품 구매 (ARRIVAL_GUARANTEE_SELLER)'
+        }, {
+          value: 'NORMAL_SELLER_PRODUCT',
+          text: '스스 / 브스 특정 판매자 특정 상품 구매 (NORMAL_SELLER_PRODUCT)'
+        }]);
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('파트너 광고주 ID');
+        element = formBuilder.createInput('쿠키오븐 CPS_파트너 광고주 ID');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('참여 경로 유형(app/web)');
+        element = formBuilder.createSelect('쿠키오븐 CPS_참여 경로 유형(app/web)', [{
+          value: 'none',
+          text: '미설정(none)'
+        }, {
+          value: 'app',
+          text: '앱(app)'
+        }, {
+          value: 'web',
+          text: '웹(web)'
+        }], 'none');
+        group.appendChild(element);
+        container.appendChild(group);
+        break;
+
+      case '네이버페이 알림받기':
+        group = formBuilder.createGroup('(메타) NF 광고주 연동 타입');
+        element = formBuilder.createInput('네이버페이 알림받기_(메타) NF 광고주 연동 타입');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('(메타) NF 광고주 연동 ID');
+        element = formBuilder.createInput('네이버페이 알림받기_(메타) NF 광고주 연동 ID');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('URL');
+        element = formBuilder.createInput('네이버페이 알림받기_URL');
+        element.addEventListener('input', function() {
+          if (this.value.includes('?')) {
+            alert("'?'는 입력할 수 없습니다. 파라미터 없는 순수 URL만 입력해주세요.");
+            this.value = '';
+          }
+        });
+        group.appendChild(element);
+        container.appendChild(group);
+        break;
+
+       case '네이버페이 스마트스토어 CPS':
+        container.appendChild(formBuilder.createHeading('본광고'));
+        group = formBuilder.createGroup('URL');
+        element = formBuilder.createInput('네이버페이 CPS_본광고_URL');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('최소 결제 금액');
+        element = formBuilder.createInput('네이버페이 CPS_본광고_최소 결제 금액');
+        group.appendChild(element);
+        container.appendChild(group);
+        
+        group = formBuilder.createGroup('(목록) 리워드 조건 설명');
+        element = formBuilder.createInput('네이버페이 CPS_본광고_(목록) 리워드 조건 설명');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('(목록) 리워드 텍스트');
+        element = formBuilder.createInput('네이버페이 CPS_본광고_(목록) 리워드 텍스트');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('(메타) NF 광고주 연동 ID');
+        element = formBuilder.createInput('네이버페이 CPS_본광고_(메타) NF 광고주 연동 ID');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('(메타) 클릭 리워드 지급 금액');
+        element = formBuilder.createInput('네이버페이 CPS_본광고_(메타) 클릭 리워드 지급 금액');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        container.appendChild(formBuilder.createHeading('부스팅 광고'));
+        group = formBuilder.createGroup('복사 필요한 광고 ID', true);
+        element = formBuilder.createInput('네이버페이 CPS_부스팅_복사 필요한 광고 ID', 'text', true);
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('URL & 상세 전용 랜딩 URL');
+        element = formBuilder.createInput('네이버페이 CPS_부스팅_URL & 상세 전용 랜딩 URL');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('문구 - 서브1 하단');
+        element = formBuilder.createInput('네이버페이 CPS_부스팅_문구 - 서브1 하단');
+        const endDateInputForNaverCPS = document.querySelector('[name="광고 집행 종료 일자"]');
+        if (endDateInputForNaverCPS) {
+          const updateSub1Bottom = () => {
+            const dateVal = endDateInputForNaverCPS.value;
+            if (dateVal && dateVal !== '무제한') {
+              const date = new Date(dateVal);
+              element.value = `매일 선착순 ${date.getMonth() + 1}/${date.getDate()} 까지`;
+            } else {
+              element.value = '';
+            }
+          };
+          endDateInputForNaverCPS.closest('.input-wrapper').querySelector('input[type=checkbox]').addEventListener('change', updateSub1Bottom);
+          if (endDateInputForNaverCPS._flatpickr) {
+            endDateInputForNaverCPS._flatpickr.config.onChange.push(updateSub1Bottom);
+          }
+          updateSub1Bottom();
+        }
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('최소 결제 금액');
+        element = formBuilder.createInput('네이버페이 CPS_부스팅_최소 결제 금액');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('(목록) 리워드 조건 설명');
+        element = formBuilder.createInput('네이버페이 CPS_부스팅_(목록) 리워드 조건 설명');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('부스팅 옵션');
+        element = formBuilder.createSelect('네이버페이 CPS_부스팅_부스팅 옵션', [{
+          value: '부스팅_A',
+          text: '부스팅_A'
+        }, {
+          value: '부스팅_B',
+          text: '부스팅_B'
+        }, {
+          value: '부스팅_C',
+          text: '부스팅_C'
+        }, ]);
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('placement 세팅 정보 옵션_추천 세팅 여부', true);
+        element = formBuilder.createSelect('네이버페이 CPS_부스팅_placement 세팅 정보 옵션_추천 세팅 여부', [{
+          value: '세팅 O',
+          text: '세팅 O'
+        }, {
+          value: '세팅 X',
+          text: '세팅 X'
+        }, ], '', true);
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('placement 세팅 정보 기본', true);
+        element = formBuilder.createCheckboxGroup('네이버페이 CPS_부스팅_placement 세팅 정보 기본', [{
+          value: '네이버쇼핑(nvshopping)',
+          text: '네이버쇼핑(nvshopping)'
+        }, {
+          value: '네이버마케팅(nvmarketing)',
+          text: '네이버마케팅(nvmarketing)'
+        }, {
+          value: '네이버마케팅_네앱(nvmarketing_nvapp)',
+          text: '네이버마케팅_네앱(nvmarketing_nvapp)'
+        }, {
+          value: '쇼핑주문배송 구매 확정 띠배너(nvshopping_order_card)',
+          text: '쇼핑주문배송 구매 확정 띠배너(nvshopping_order_card)'
+        }, {
+          value: '쇼핑주문배송 하단 추천 영역(nvshopping_order_bottom)',
+          text: '쇼핑주문배송 하단 추천 영역(nvshopping_order_bottom)'
+        }, {
+          value: '(신)결제홈 결제내역 카드(historycard)',
+          text: '(신)결제홈 결제내역 카드(historycard)'
+        }, ], true);
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('placement 세팅 정보 옵션_카테고리', true);
+        element = formBuilder.createSelect('네이버페이 CPS_부스팅_placement 세팅 정보 옵션_카테고리', [{
+          value: '건강',
+          text: '건강'
+        }, {
+          value: '식품',
+          text: '식품'
+        }, {
+          value: '생활',
+          text: '생활'
+        }, {
+          value: '뷰티',
+          text: '뷰티'
+        }, {
+          value: '기타',
+          text: '기타'
+        }, ], '', true);
+        group.appendChild(element);
+        container.appendChild(group);
+        break;
+
+      case 'CPQ':
+        group = formBuilder.createGroup('CPQ 뷰');
+        element = formBuilder.createSelect('CPQ_CPQ 뷰', [{
+          value: 'offerwall',
+          text: 'offerwall'
+        }, {
+          value: 'renewal',
+          text: 'renewal'
+        }], 'offerwall');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('랜딩 형태');
+        const landingTypeSelect = formBuilder.createSelect('CPQ_랜딩 형태', [{
+          value: '아웃랜딩(이미지형 CPQ)',
+          text: '아웃랜딩(이미지형 CPQ)'
+        }, {
+          value: '아웃랜딩(CPVQ)',
+          text: '아웃랜딩(CPVQ)'
+        }, {
+          value: '임베디드(CPVQ)',
+          text: '임베디드(CPVQ)'
+        }]);
+        group.appendChild(landingTypeSelect);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('임배디드 연결 형태');
+        element = formBuilder.createSelect('CPQ_임배디드 연결 형태', [{
+          value: '유튜브ID',
+          text: '유튜브ID'
+        }, {
+          value: '네이버 TV CODE',
+          text: '네이버 TV CODE'
+        }]);
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('유튜브 ID / 네이버 TV CODE');
+        element = formBuilder.createInput('CPQ_유튜브 ID / 네이버 TV CODE');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('이미지');
+        element = formBuilder.createInput('CPQ_이미지');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('이미지 연결 링크');
+        element = formBuilder.createInput('CPQ_이미지 연결 링크');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('퀴즈');
+        element = formBuilder.createTextarea('CPQ_퀴즈');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('정답');
+        element = formBuilder.createInput('CPQ_정답');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('정답 placeholder 텍스트');
+        element = formBuilder.createInput('CPQ_정답 placeholder 텍스트');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('오답 alert 메시지');
+        element = formBuilder.createTextarea('CPQ_오답 alert 메시지', 2);
+        element.value = '오답입니다. 다시 한번 힌트 확인 후 정답을 입력해 주세요!';
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('사전 랜딩(딥링크) 사용');
+        const deeplinkSelect = formBuilder.createSelect('CPQ_사전 랜딩(딥링크) 사용', [{
+          value: 'TRUE',
+          text: 'TRUE'
+        }, {
+          value: 'FALSE',
+          text: 'FALSE'
+        }]);
+        group.appendChild(deeplinkSelect);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('사전 랜딩 실행 필수');
+        const deeplinkRequiredSelect = formBuilder.createSelect('CPQ_사전 랜딩 실행 필수', [{
+          value: 'TRUE',
+          text: 'TRUE'
+        }, {
+          value: 'FALSE',
+          text: 'FALSE'
+        }]);
+        group.appendChild(deeplinkRequiredSelect);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('사전 랜딩 URL');
+        element = formBuilder.createInput('CPQ_사전 랜딩 URL');
+        group.appendChild(element);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('사전 랜딩 버튼 텍스트');
+        const deeplinkButtonInput = formBuilder.createInput('CPQ_사전 랜딩 버튼 텍스트');
+        group.appendChild(deeplinkButtonInput);
+        container.appendChild(group);
+
+        group = formBuilder.createGroup('사전 랜딩 미실행 alert 메시지');
+        const deeplinkAlertInput = formBuilder.createTextarea('CPQ_사전 랜딩 미실행 alert 메시지', 2);
+        group.appendChild(deeplinkAlertInput);
+        container.appendChild(group);
+
+        landingTypeSelect.addEventListener('change', function() {
+          const isOutlanding = this.value.startsWith('아웃랜딩');
+          deeplinkSelect.value = isOutlanding ? 'TRUE' : 'FALSE';
+          deeplinkSelect.dispatchEvent(new Event('change'));
+        });
+
+        deeplinkSelect.addEventListener('change', function() {
+          const isTrue = this.value === 'TRUE';
+          deeplinkRequiredSelect.value = this.value;
+          deeplinkButtonInput.value = isTrue ? '힌트 보러가기' : '';
+          deeplinkAlertInput.value = isTrue ? '랜딩페이지에서 힌트 확인 후 참여해주세요!' : '';
+        });
+
+        landingTypeSelect.dispatchEvent(new Event('change'));
+        break;
+
+      case 'CPA SUBSCRIBE':
+        group = formBuilder.createGroup('구독 대상 이름', true);
+        const subTargetSelect = formBuilder.createSelect('CPA SUBSCRIBE_구독 대상 이름', [{
+          value: '기본이벤트',
+          text: '기본이벤트'
+        }, {
+          value: '유튜브 구독(채널메인)',
+          text: '유튜브 구독(채널메인)'
+        }, {
+          value: '유튜브 구독(특정영상)',
+          text: '유튜브 구독(특정영상)'
+        }, {
+          value: '언론사 구독',
+          text: '언론사 구독'
+        }, {
+          value: '팔로우',
+          text: '팔로우'
+        }, {
+          value: '좋아요',
+          text: '좋아요'
+        }, {
+          value: '채널추가',
+          text: '채널추가'
+        }, {
+          value: '네이버TV 구독',
+          text: '네이버TV 구독'
+        }, {
+          value: '스토어찜',
+          text: '스토어찜'
+        }, {
+          value: '쇼핑라이브 알림받기',
+          text: '쇼핑라이브 알림받기'
+        }, {
+          value: '라이브방송 참여하기',
+          text: '라이브방송 참여하기'
+        }, {
+          value: '유튜브_좋아요',
+          text: '유튜브_좋아요'
+        }, {
+          value: '네이버_플레이스_저장',
+          text: '네이버_플레이스_저장'
+        }, {
+          value: '틱톡',
+          text: '틱톡'
+        }, {
+          value: 'X(트위터)',
+          text: 'X(트위터)'
+        }], '', true);
+        group.appendChild(subTargetSelect);
+        container.appendChild(group);
+
+        const identifierGroup = formBuilder.createGroup('이미지 인식에 사용할 식별자');
+        const identifierInput = formBuilder.createInput('CPA SUBSCRIBE_이미지 인식에 사용할 식별자');
+        identifierGroup.appendChild(identifierInput);
+        container.appendChild(identifierGroup);
+
+        const id1Group = formBuilder.createGroup('광고주 계정 식별자1');
+        id1Group.appendChild(formBuilder.createInput('CPA SUBSCRIBE_광고주 계정 식별자1'));
+        container.appendChild(id1Group);
+        const id2Group = formBuilder.createGroup('광고주 계정 식별자2');
+        id2Group.appendChild(formBuilder.createInput('CPA SUBSCRIBE_광고주 계정 식별자2'));
+        container.appendChild(id2Group);
+        const id3Group = formBuilder.createGroup('광고주 계정 식별자3');
+        id3Group.appendChild(formBuilder.createInput('CPA SUBSCRIBE_광고주 계정 식별자3'));
+        container.appendChild(id3Group);
+
+        const landingUrlGroup = formBuilder.createGroup('구독 페이지 랜딩 URL');
+        const landingUrlInput = formBuilder.createInput('CPA SUBSCRIBE_구독 페이지 랜딩 URL');
+        landingUrlGroup.appendChild(landingUrlInput);
+        container.appendChild(landingUrlGroup);
+
+        const landingUrlAosGroup = formBuilder.createGroup('구독 페이지 랜딩 URL AOS');
+        const landingUrlAosInput = formBuilder.createInput('CPA SUBSCRIBE_구독 페이지 랜딩 URL AOS');
+        landingUrlAosGroup.appendChild(landingUrlAosInput);
+        container.appendChild(landingUrlAosGroup);
+
+        const landingUrlIosGroup = formBuilder.createGroup('구독 페이지 랜딩 URL IOS');
+        const landingUrlIosInput = formBuilder.createInput('CPA SUBSCRIBE_구독 페이지 랜딩 URL IOS');
+        landingUrlIosGroup.appendChild(landingUrlIosInput);
+        container.appendChild(landingUrlIosGroup);
+
+        subTargetSelect.addEventListener('change', function() {
+          const autoIdTargets = ['유튜브 구독(채널메인)', '유튜브 구독(특정영상)', '팔로우', '좋아요', '채널추가', '유튜브_좋아요', '언론사 구독', '틱톡', 'X(트위터)'];
+          const showAutoIdFields = autoIdTargets.includes(this.value);
+
+          identifierGroup.style.display = showAutoIdFields ? 'none' : 'block';
+          id1Group.style.display = showAutoIdFields ? 'block' : 'none';
+          id2Group.style.display = showAutoIdFields ? 'block' : 'none';
+          id3Group.style.display = showAutoIdFields ? 'block' : 'none';
+
+          const isFollow = this.value === '팔로우';
+          landingUrlInput.placeholder = isFollow ? '인스타 계정명 입력' : '';
+          landingUrlAosGroup.style.display = isFollow ? 'block' : 'none';
+          landingUrlIosGroup.style.display = isFollow ? 'block' : 'none';
+
+          if (!isFollow) {
+            landingUrlAosInput.value = ''; // AOS URL 값 초기화
+            landingUrlIosInput.value = ''; // IOS URL 값 초기화
+          }
+        });
+
+        landingUrlInput.addEventListener('input', function() {
+          if (subTargetSelect.value === '팔로우') {
+            const account = this.value;
+            landingUrlAosInput.value = `intent://instagram.com/_u/${account}#Intent;package=com.instagram.android;scheme=https;end`;
+            landingUrlIosInput.value = `instagram://user?username=${account}`;
+          }
+        });
+
+        subTargetSelect.dispatchEvent(new Event('change'));
+        break;
+    }
+  }
+
+
+  function toggleOtherRequestSubform(selectedValue) {
+  const container = document.getElementById('otherRequestSubformContainer');
+  container.innerHTML = ''; // 컨테이너 초기화
+
+  if (selectedValue === '팝업요청') {
+    buildPopupRequestForm(container);
+  } else if (selectedValue === '배너요청') {
+    buildBannerRequestForm(container);
+  } else if (selectedValue === '채널링요청') {
+    // '채널링요청' 시에도 배너 폼을 생성하는 함수를 호출합니다.
+    buildChannelingRequestForm(container);
+  }
+}
+
+
+function buildPopupRequestForm(container) {
+  // formBuilder 헬퍼 함수 (이전과 동일)
+  const formBuilder = {
+    createGroup: (labelText, isRequired = false, description = '') => {
+      const group = document.createElement('div');
+      group.className = 'form-group';
+      const label = document.createElement('label');
+      label.textContent = labelText;
+      if (isRequired) label.className = 'required';
+      group.appendChild(label);
+      if (description) {
+        const desc = document.createElement('p');
+        desc.className = 'description';
+        desc.textContent = description;
+        group.appendChild(desc);
+      }
+      return group;
+    },
+    createInput: (name, type = 'text', required = false, defaultValue = '') => {
+      const input = document.createElement('input');
+      input.type = type;
+      input.name = name;
+      input.required = required;
+      if (defaultValue) input.value = defaultValue;
+      return input;
+    },
+    createSelect: (name, options, required = false, defaultValue = '') => {
+      const select = document.createElement('select');
+      select.name = name;
+      select.required = required;
+      select.innerHTML = options.map(o => `<option value="${o}" ${o === defaultValue ? 'selected' : ''}>${o}</option>`).join('');
+      return select;
+    },
+    createDateTimePicker: (name, required = true, includeUnlimited = false, defaultTime = {h: 0, m: 0, s: 0}, format = "Y-m-d H:i") => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'input-wrapper';
+      const dtInput = document.createElement('input');
+      dtInput.type = 'text';
+      dtInput.name = name;
+      dtInput.required = required;
+      dtInput.placeholder = '날짜와 시간을 선택하세요';
+      wrapper.appendChild(dtInput);
+
+      const defaultDate = new Date();
+      defaultDate.setHours(defaultTime.h, defaultTime.m, defaultTime.s, 0);
+
+      const fp = flatpickr(dtInput, {
+        enableTime: true,
+        enableSeconds: format.includes('S'),
+        dateFormat: format,
+        time_24hr: true,
+        defaultDate: defaultDate
+      });
+
+      if (includeUnlimited) {
+        const unlimitedLabel = document.createElement('label');
+        unlimitedLabel.style.fontWeight = 'normal';
+        unlimitedLabel.style.marginLeft = '10px';
+        const unlimitedCheckbox = document.createElement('input');
+        unlimitedCheckbox.type = 'checkbox';
+        unlimitedLabel.appendChild(unlimitedCheckbox);
+        unlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+        unlimitedCheckbox.onchange = () => {
+          if (unlimitedCheckbox.checked) {
+            fp.clear();
+            dtInput.value = "무제한";
+            dtInput.disabled = true;
+            dtInput.required = false;
+          } else {
+            dtInput.disabled = false;
+            dtInput.required = required;
+            fp.setDate(defaultDate, true);
+          }
+        };
+        wrapper.appendChild(unlimitedLabel);
+      }
+      return wrapper;
+    }
+  };
+
+  let group, element;
+  
+  group = formBuilder.createGroup('캠페인명', true);
+  element = formBuilder.createInput('캠페인명', 'text', true);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('캠페인 ID', true);
+  element = formBuilder.createInput('캠페인 ID', 'text', true);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('팝업 노출 시작 일시', true);
+  element = formBuilder.createDateTimePicker('팝업 노출 시작 일시', true);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('팝업 노출 종료 일시', true);
+   element = formBuilder.createDateTimePicker('팝업 노출 종료 일시', true, true, {h: 23, m: 59, s: 0});
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('팝업 표시 타입', true);
+  element = formBuilder.createSelect('팝업 표시 타입', ['단일광고소재', '팝업 이미지 ONLY'], true, '단일광고소재');
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('우선순위');
+  element = formBuilder.createInput('우선순위', 'text', false, '10');
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('이미지 경로');
+  element = formBuilder.createInput('이미지 경로', 'text', false);
+  group.appendChild(element);
+  container.appendChild(group);
+}
+
+
+function buildBannerRequestForm(container) {
+    const formBuilder = {
+    createGroup: (labelText, isRequired = false, description = '') => {
+      const group = document.createElement('div');
+      group.className = 'form-group';
+      const label = document.createElement('label');
+      label.textContent = labelText;
+      if (isRequired) label.className = 'required';
+      group.appendChild(label);
+      if (description) {
+        const desc = document.createElement('p');
+        desc.className = 'description';
+        desc.textContent = description;
+        group.appendChild(desc);
+      }
+      return group;
+    },
+    createInput: (name, type = 'text', required = false, defaultValue = '') => {
+      const input = document.createElement('input');
+      input.type = type;
+      input.name = name;
+      input.required = required;
+      if (defaultValue) input.value = defaultValue;
+      return input;
+    },
+    createSelect: (name, options, required = false, defaultValue = '') => {
+      const select = document.createElement('select');
+      select.name = name;
+      select.required = required;
+      select.innerHTML = options.map(o => `<option value="${o}" ${o === defaultValue ? 'selected' : ''}>${o}</option>`).join('');
+      return select;
+    },
+    createDateTimePicker: (name, required = true, includeUnlimited = false, defaultTime = {h: 0, m: 0, s: 0}, format = "Y-m-d H:i") => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'input-wrapper';
+      const dtInput = document.createElement('input');
+      dtInput.type = 'text';
+      dtInput.name = name;
+      dtInput.required = required;
+      dtInput.placeholder = '날짜와 시간을 선택하세요';
+      wrapper.appendChild(dtInput);
+
+      const defaultDate = new Date();
+      defaultDate.setHours(defaultTime.h, defaultTime.m, defaultTime.s, 0);
+
+      const fp = flatpickr(dtInput, {
+        enableTime: true,
+        enableSeconds: format.includes('S'),
+        dateFormat: format,
+        time_24hr: true,
+        defaultDate: defaultDate
+      });
+
+      if (includeUnlimited) {
+        const unlimitedLabel = document.createElement('label');
+        unlimitedLabel.style.fontWeight = 'normal';
+        unlimitedLabel.style.marginLeft = '10px';
+        const unlimitedCheckbox = document.createElement('input');
+        unlimitedCheckbox.type = 'checkbox';
+        unlimitedLabel.appendChild(unlimitedCheckbox);
+        unlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+        unlimitedCheckbox.onchange = () => {
+          if (unlimitedCheckbox.checked) {
+            fp.clear();
+            dtInput.value = "무제한";
+            dtInput.disabled = true;
+            dtInput.required = false;
+          } else {
+            dtInput.disabled = false;
+            dtInput.required = required;
+            fp.setDate(defaultDate, true);
+          }
+        };
+        wrapper.appendChild(unlimitedLabel);
+      }
+      return wrapper;
+    }
+  };
+  
+  let group, element;
+
+  group = formBuilder.createGroup('캠페인명', true);
+  element = formBuilder.createInput('캠페인명', 'text', true);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('캠페인 ID', true);
+  element = formBuilder.createInput('캠페인 ID', 'text', true);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('배너 노출 시작 일시', true);
+  element = formBuilder.createDateTimePicker('배너 노출 시작 일시', true);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('배너 노출 종료 일시', true);
+  element = formBuilder.createDateTimePicker('배너 노출 종료 일시', true, true, {h: 23, m: 59, s: 0});
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('배너 NEW 표시 종료일시', true);
+  element = formBuilder.createDateTimePicker('배너 NEW 표시 종료일시', true, false, {h:23, m:59, s:59}, "Y-m-d H:i:S");
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('배너 텍스트');
+  element = formBuilder.createInput('배너 텍스트', 'text', false);
+  group.appendChild(element);
+  container.appendChild(group);
+  
+  group = formBuilder.createGroup('배너 표시 타입', true);
+  element = formBuilder.createSelect('배너 표시 타입', ['단일광고소재', '배너 이미지 ONLY'], true, '단일광고소재');
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('배너 배경색상');
+  element = formBuilder.createInput('배너 배경색상', 'text', false);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('우선순위', true);
+  element = formBuilder.createInput('우선순위', 'text', true, '10');
+  group.appendChild(element);
+  container.appendChild(group);
+  
+  group = formBuilder.createGroup('이미지 경로');
+  element = formBuilder.createInput('이미지 경로', 'text', false);
+  group.appendChild(element);
+  container.appendChild(group);
+}
+
+
+function buildChannelingRequestForm(container) {
+  const formBuilder = {
+    createGroup: (labelText, isRequired = false, description = '') => {
+      const group = document.createElement('div');
+      group.className = 'form-group';
+      const label = document.createElement('label');
+      label.textContent = labelText;
+      if (isRequired) label.className = 'required';
+      group.appendChild(label);
+      if (description) {
+        const desc = document.createElement('p');
+        desc.className = 'description';
+        desc.textContent = description;
+        group.appendChild(desc);
+      }
+      return group;
+    },
+    createInput: (name, type = 'text', required = false, defaultValue = '') => {
+      const input = document.createElement('input');
+      input.type = type;
+      input.name = name;
+      input.required = required;
+      if (defaultValue) input.value = defaultValue;
+      return input;
+    },
+    createSelect: (name, options, required = false, defaultValue = '') => {
+      const select = document.createElement('select');
+      select.name = name;
+      select.required = required;
+      select.innerHTML = options.map(o => `<option value="${o}" ${o === defaultValue ? 'selected' : ''}>${o}</option>`).join('');
+      return select;
+    },
+    createDateTimePicker: (name, required = true, includeUnlimited = false, defaultTime = {h: 0, m: 0, s: 0}, format = "Y-m-d H:i") => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'input-wrapper';
+      const dtInput = document.createElement('input');
+      dtInput.type = 'text';
+      dtInput.name = name;
+      dtInput.required = required;
+      dtInput.placeholder = '날짜와 시간을 선택하세요';
+      wrapper.appendChild(dtInput);
+
+      const defaultDate = new Date();
+      defaultDate.setHours(defaultTime.h, defaultTime.m, defaultTime.s, 0);
+
+      const fp = flatpickr(dtInput, {
+        enableTime: true,
+        enableSeconds: format.includes('S'),
+        dateFormat: format,
+        time_24hr: true,
+        defaultDate: defaultDate
+      });
+
+      if (includeUnlimited) {
+        const unlimitedLabel = document.createElement('label');
+        unlimitedLabel.style.fontWeight = 'normal';
+        unlimitedLabel.style.marginLeft = '10px';
+        const unlimitedCheckbox = document.createElement('input');
+        unlimitedCheckbox.type = 'checkbox';
+        unlimitedLabel.appendChild(unlimitedCheckbox);
+        unlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+        unlimitedCheckbox.onchange = () => {
+          if (unlimitedCheckbox.checked) {
+            fp.clear();
+            dtInput.value = "무제한";
+            dtInput.disabled = true;
+            dtInput.required = false;
+          } else {
+            dtInput.disabled = false;
+            dtInput.required = required;
+            fp.setDate(defaultDate, true);
+          }
+        };
+        wrapper.appendChild(unlimitedLabel);
+      }
+      return wrapper;
+    }
+  };
+  
+  let group, element;
+  
+  group = formBuilder.createGroup('캠페인명', true);
+  element = formBuilder.createInput('캠페인명', 'text', true);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('캠페인 ID', true);
+  element = formBuilder.createInput('캠페인 ID', 'text', true);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('배너 노출 시작 일시', true);
+  element = formBuilder.createDateTimePicker('배너 노출 시작 일시', true);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('배너 노출 종료 일시', true);
+  element = formBuilder.createDateTimePicker('배너 노출 종료 일시', true, true, {h: 23, m: 59, s: 0});
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('배너 NEW 표시 종료일시', true);
+  element = formBuilder.createDateTimePicker('배너 NEW 표시 종료일시', true, false, {h:23, m:59, s:59}, "Y-m-d H:i:S");
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('배너 텍스트');
+  element = formBuilder.createInput('배너 텍스트', 'text', false);
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('배너 배경색상', true);
+  element = formBuilder.createInput('배너 배경색상', 'text', true, '#FFFFFF');
+  group.appendChild(element);
+  container.appendChild(group);
+
+  group = formBuilder.createGroup('우선순위', true);
+  element = formBuilder.createInput('우선순위', 'text', true, '10');
+  group.appendChild(element);
+  container.appendChild(group);
+  
+  group = formBuilder.createGroup('이미지 경로', true);
+  element = formBuilder.createInput('이미지 경로', 'text', true);
+  group.appendChild(element);
+  container.appendChild(group);
+}
+
+
+function setupFixedRateCpsListeners(form) {
+  const adTypeSelect = document.getElementById('adType');
+  if (!adTypeSelect || adTypeSelect.value !== '완전 정률 - 쿠키오븐 스마트스토어 CPS') {
+    return; // 해당 타입이 아니면 실행 안함
+  }
+
+  const rsRateInput = form.querySelector('[name="광고비 R/S율"]');
+  const minAmountInput = form.querySelector('[name="최소 결제 금액"]');
+  const maxAmountInput = form.querySelector('[name="최대 인정 결정 금액"]');
+  const sub2Textarea = form.querySelector('[name="문구 - 서브2"]');
+
+  // R/S율 입력 필드와 미리보기 div 생성/선택
+  let rsRatePreviewDiv = null;
+  if (rsRateInput) {
+    const group = rsRateInput.closest('.form-group');
+    if (group) {
+        // 기존 description은 유지 (정적 설명용)
+        const staticDesc = group.querySelector('.description');
+        if (staticDesc) {
+            staticDesc.textContent = '숫자만 입력 (예: 15)'; // 설명 단순화
+        }
+
+        // 미리보기용 div 추가 또는 선택
+        rsRatePreviewDiv = group.querySelector('.dynamic-preview');
+        if (!rsRatePreviewDiv) {
+            rsRatePreviewDiv = document.createElement('div');
+            rsRatePreviewDiv.className = 'description dynamic-preview'; // description 스타일 사용
+            rsRatePreviewDiv.style.marginTop = '5px'; // 입력 필드와 간격
+            rsRatePreviewDiv.style.fontWeight = 'bold'; // 강조
+            // 입력 필드 다음에 미리보기 div 삽입
+            rsRateInput.parentNode.insertBefore(rsRatePreviewDiv, rsRateInput.nextSibling);
+        }
+    }
+  }
+
+
+  const updateRsRatePreview = () => {
+    // 미리보기 div가 없으면 실행 중단
+    if (!rsRateInput || !rsRatePreviewDiv) return;
+    const rate = parseFloat(rsRateInput.value) || 0;
+    // 미리보기 텍스트 업데이트
+    rsRatePreviewDiv.textContent = `${rate} % (어드민 : ${rate / 100})`;
+  };
+
+  const updateSub2Text = () => {
+    if (!rsRateInput || !minAmountInput || !maxAmountInput || !sub2Textarea) return;
+
+    const rate = parseFloat(rsRateInput.value) || 0;
+    const minAmount = parseFloat(minAmountInput.value) || 0;
+    const maxAmount = parseFloat(maxAmountInput.value) || 0;
+
+    const A = (rate / 100) * 0.7 * 100; // 계산값 A
+    const B = minAmount / 10000;      // 계산값 B (만원 단위)
+    const C = maxAmount / 10000;      // 계산값 C (만원 단위)
+
+    // A 값을 소수점 첫째 자리까지 표시 (예: 10.5)
+    const formattedA = A.toFixed(1);
+
+    sub2Textarea.value = `[결제 금액 및 지급 쿠키 관련 안내 사항]
+*결제 금액의 ${formattedA}%에 해당하는 금액이 쿠키로 지급됩니다.
+*1만 원 이상 주문 건에 대해서만 쿠키가 지급됩니다.
+*주문 금액 기준으로 ${C}만 원까지만 쿠키가 지급됩니다. (${C}만 원을 초과하여 주문해도 지급되는 쿠키는 ${C}만 원에 해당하는 금액 기준으로 적용됩니다.)
+*단, 쿠키는 1개당 100원으로 계산되며, 10원 단위는 버림 처리 후 쿠키가 지급됩니다.
+
+[참여 관련 안내 사항]
+*배송료를 제외한 실 결제금액 기준으로 지급 쿠키가 계산됩니다.
+*예약구매, 무통장입금, 후불결제 시에는 쿠키 지급이 되지 않습니다.
+*네이버웹툰/시리즈에 로그인한 네이버ID로 구매시에만 쿠키가 지급 됩니다.
+*참여하기 버튼 클릭 후 24시간 이내 구매가 완료 되어야 하며, 가장 마지막으로 클릭한 이벤트 기준으로 쿠키가 지급 됩니다.
+*결제 취소 시(부분취소 및 판매자 이슈로 인한 취소 포함) 지급된 쿠키는 전량 회수됩니다.
+*쿠키 사용 후 구매 취소 시 이벤트 참여가 제한될 수 있으며, 사용하신 쿠키 금액이 청구될 수 있습니다.
+*지급된 쿠키는 유효기간이 존재합니다. 하단 ‘상세 안내’를 꼭 참고 부탁드립니다.`;
+  };
+
+  // 이벤트 리스너 연결
+  if (rsRateInput) {
+    rsRateInput.addEventListener('input', updateRsRatePreview);
+    rsRateInput.addEventListener('input', updateSub2Text);
+  }
+  if (minAmountInput) minAmountInput.addEventListener('input', updateSub2Text);
+  if (maxAmountInput) maxAmountInput.addEventListener('input', updateSub2Text);
+
+  // 초기 로딩 시 값 업데이트
+  updateRsRatePreview();
+  updateSub2Text();
+}
+
+function buildCxRequestForm() {
+  const container = document.getElementById('cxFormContainer');
+  container.innerHTML = '';
+
+  const group = document.createElement('div');
+  group.className = 'form-group';
+
+  const label = document.createElement('label');
+  label.className = 'required';
+  label.textContent = '요청 내용';
+
+  const textarea = document.createElement('textarea');
+  textarea.name = '요청 내용';
+  textarea.required = true;
+  textarea.rows = 10; // 10줄 이상
+  textarea.placeholder = '요청 내용을 입력하세요. (URL 입력 시 자동으로 링크가 생성됩니다)';
+
+  // 간단한 입력 안내
+  const desc = document.createElement('p');
+  desc.className = 'description';
+  desc.textContent = 'HTML 태그(< >)나 특수문자도 그대로 입력하시면 됩니다.';
+
+  group.appendChild(label);
+  group.appendChild(textarea);
+  group.appendChild(desc);
+  container.appendChild(group);
+}
+
+
+function buildBdRequestForm() {
+  const container = document.getElementById('bdRequestForm'); // id 수정 (기존 div 내부가 아닌 form 자체를 타겟)
+  // 기존에 container 내부에 div가 있었다면 초기화, 혹은 form 내부를 비우고 시작
+  const formContainer = document.createElement('div');
+  formContainer.id = 'bdFormContainer';
+  container.innerHTML = ''; 
+  container.appendChild(formContainer);
+
+  // 1. 요청 제목
+  const titleGroup = document.createElement('div');
+  titleGroup.className = 'form-group';
+  const titleLabel = document.createElement('label');
+  titleLabel.className = 'required';
+  titleLabel.textContent = '요청 제목';
+  const titleInput = document.createElement('input');
+  titleInput.type = 'text';
+  titleInput.name = '요청제목';
+  titleInput.required = true;
+  titleInput.placeholder = '요청 제목을 입력하세요';
+  titleGroup.appendChild(titleLabel);
+  titleGroup.appendChild(titleInput);
+  formContainer.appendChild(titleGroup);
+
+  // 2. 요청 내용
+  const contentGroup = document.createElement('div');
+  contentGroup.className = 'form-group';
+  const contentLabel = document.createElement('label');
+  contentLabel.className = 'required';
+  contentLabel.textContent = '요청 내용';
+  const contentTextarea = document.createElement('textarea');
+  contentTextarea.name = '요청내용';
+  contentTextarea.required = true;
+  contentTextarea.rows = 10;
+  contentTextarea.placeholder = '요청 내용을 상세히 입력하세요. (URL 자동 링크, 특수문자 지원)';
+  contentGroup.appendChild(contentLabel);
+  contentGroup.appendChild(contentTextarea);
+  formContainer.appendChild(contentGroup);
+
+  // 3. 소재 (파일 첨부)
+  const fileGroup = document.createElement('div');
+  fileGroup.className = 'form-group';
+  const fileLabel = document.createElement('label');
+  fileLabel.textContent = '소재 (선택, 최대 10개, 개당 200KB 미만)';
+  
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.name = 'attachments';
+  fileInput.multiple = true; // 다중 선택 가능
+  
+  // 파일 유효성 검사 및 안내
+  const fileDesc = document.createElement('div');
+  fileDesc.className = 'description';
+  fileDesc.style.color = '#666';
+  fileDesc.textContent = '선택된 파일: 없음';
+
+  fileInput.addEventListener('change', function() {
+    const files = Array.from(this.files);
+    if (files.length > 10) {
+      alert('파일은 최대 10개까지만 업로드 가능합니다.');
+      this.value = ''; // 초기화
+      fileDesc.textContent = '선택된 파일: 없음';
+      return;
+    }
+
+    const invalidFiles = files.filter(f => f.size >= 200 * 1024); // 210KB
+    if (invalidFiles.length > 0) {
+      alert(`다음 파일이 200KB를 초과합니다:\n${invalidFiles.map(f => f.name).join('\n')}`);
+      this.value = ''; // 초기화
+      fileDesc.textContent = '선택된 파일: 없음';
+      return;
+    }
+
+    fileDesc.textContent = `선택된 파일: ${files.length}개 (${files.map(f => f.name).join(', ')})`;
+  });
+
+  fileGroup.appendChild(fileLabel);
+  fileGroup.appendChild(fileInput);
+  fileGroup.appendChild(fileDesc);
+  formContainer.appendChild(fileGroup);
+}
+
+
+function buildCopyCreationForm() {
+    const container = document.getElementById('copyCreationFieldsContainer');
+    container.innerHTML = '';
+
+    // 기존 광고 수정 요청 필드와 동일한 정의 사용
+    const fields = [
+        { name: '광고주 연동 토큰 값', type: 'text' },
+        { name: '매체', type: 'textarea', rows: 3 },
+        { name: '단가', type: 'text' },
+        { name: '총물량', type: 'textarea', rows: 3 },
+        { name: '리워드', type: 'textarea', rows: 3 },
+        { name: '일물량', type: 'textarea', rows: 3 },
+        { name: '광고 집행 시작 일시', type: 'datetime-local' },
+        { name: '광고 집행 종료 일시', type: 'datetime-local-unlimited' },
+        { name: '광고 노출 중단 시작일시', type: 'datetime-local' },
+        { name: '광고 노출 중단 종료일시', type: 'datetime-local-unlimited' },
+        { name: '광고 참여 시작 후 완료 인정 유효기간 (일단위)', type: 'text' },
+        { name: '트래커', type: 'text' },
+        { name: '완료 이벤트 이름', type: 'text' },
+        { name: '트래커 추가 정보 입력', type: 'textarea', rows: 3 },
+        { name: 'URL - 기본', type: 'text' },
+        { name: 'URL - AOS', type: 'text' },
+        { name: 'URL - IOS', type: 'text' },
+        { name: 'URL - PC', type: 'text' },
+        { 
+            name: 'URL - 네이버페이 CPC 전용', 
+            type: 'group_checkbox',
+            subFields: [
+                { name: '기본 URL', type: 'text', required: true },
+                { name: '상세전용랜딩 URL', type: 'text', required: true }
+            ] 
+        },
+        { name: '소재 경로', type: 'textarea', rows: 3 },
+        { name: '적용 필요 항목', type: 'text' },
+        { name: '라이브 시작 시간', type: 'text', defaultValue: '00:00' },
+        { name: '라이브 종료 시간', type: 'text', defaultValue: '24:00' },
+        { name: 'adid 타겟팅 모수파일', type: 'text' },
+        { name: '데모타겟1', type: 'text' },
+        { name: '데모타겟2', type: 'text' },
+        { name: '2차 액션 팝업 사용', type: 'select', options: ['FALSE', 'TRUE'], subFields: [
+            { name: '2차 액션 팝업 이미지 링크', type: 'text', required: true },
+            { name: '2차 액션 팝업 타이틀', type: 'text', required: true },
+            { name: '2차 액션 팝업 액션 버튼명', type: 'text', required: true },
+            { name: '2차 액션 팝업 랜딩 URL', type: 'text', required: true }
+          ]
+        },
+        { name: '문구 - 타이틀', type: 'text' },
+        { name: '문구 - 서브', type: 'text' },
+        { name: '문구 - 상세화면 상단 타이틀', type: 'text' },
+        { name: '문구 - 서브1 상단', type: 'text' },
+        { name: '문구 - 서브1 하단', type: 'text' },
+        { name: '액션 버튼', type: 'text' },
+        { name: '문구 - 서브2', type: 'textarea', rows: 3 },
+        { name: '노출 대상', type: 'select', options: ['모든 사용자', '테스트 사용자'] },
+        { name: '기타', type: 'textarea', rows: 3 },
+        { name: '광고 타입별 추가', type: 'select-adType', options: ['쿠키오븐 스마트스토어 CPS', '네이버페이 알림받기', '네이버페이 스마트스토어 CPS', 'CPQ', 'CPA SUBSCRIBE'] }
+    ];
+
+    fields.forEach(field => {
+        const group = document.createElement('div');
+        group.className = 'checkbox-field-group';
+
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        // ID 충돌 방지를 위해 접두사 'copy-' 사용
+        checkbox.id = `copy-check-${field.name}`; 
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(` ${field.name}`));
+        group.appendChild(label);
+        
+        const fieldContainer = document.createElement('div');
+        fieldContainer.className = 'modification-field form-group';
+        fieldContainer.id = `copy-field-${field.name}`;
+        fieldContainer.style.marginBottom = '0';
+        
+        let element;
+        // ... (이하 로직은 buildModificationRequestForm과 유사하지만 element 생성 로직 재사용)
+        // 코드 중복을 줄이기 위해 핵심 생성 로직만 복사했습니다. 
+        
+        if (field.type === 'group_checkbox' && field.subFields) {
+            const subContainer = document.createElement('div');
+            subContainer.style.paddingLeft = '20px';
+            field.subFields.forEach(sub => {
+                const subGroup = document.createElement('div');
+                subGroup.className = 'form-group';
+                const subLabel = document.createElement('label');
+                subLabel.textContent = sub.name;
+                if (sub.required) subLabel.classList.add('required');
+                const subInput = document.createElement('input');
+                subInput.type = sub.type;
+                subInput.name = sub.name;
+                subGroup.appendChild(subLabel);
+                subGroup.appendChild(subInput);
+                subContainer.appendChild(subGroup);
+            });
+            fieldContainer.appendChild(subContainer);
+            element = null;
+        } else {
+            switch(field.type) {
+                case 'textarea':
+                    element = document.createElement('textarea');
+                    element.rows = field.rows || 3;
+                    break;
+                case 'datetime-local':
+                    element = document.createElement('input');
+                    element.type = 'text';
+                    element.placeholder = '날짜와 시간을 선택하세요';
+                    element.name = field.name;  
+                    fieldContainer.appendChild(element);
+                    const config = { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true };
+                    if (field.name.includes('시작')) config.defaultDate = new Date().setHours(0,0,0,0);
+                    else if (field.name.includes('종료')) config.defaultDate = new Date().setHours(23,59,0,0);
+                    flatpickr(element, config);
+                    element = null;
+                    break;
+                case 'datetime-local-unlimited':
+                    const dtWrapper = document.createElement('div');
+                    dtWrapper.className = 'input-wrapper';
+                    const dtInput = document.createElement('input');
+                    dtInput.type = 'text';
+                    dtInput.placeholder = '날짜와 시간을 선택하세요';
+                    dtInput.name = field.name;
+                    const dtUnlimitedCheck = document.createElement('input');
+                    dtUnlimitedCheck.type = 'checkbox';
+                    dtUnlimitedCheck.style.marginLeft = '10px';
+                    const dtUnlimitedLabel = document.createElement('label');
+                    dtUnlimitedLabel.style.fontWeight = 'normal';
+                    dtUnlimitedLabel.appendChild(dtUnlimitedCheck);
+                    dtUnlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+                    dtWrapper.appendChild(dtInput);
+                    dtWrapper.appendChild(dtUnlimitedLabel);
+                    fieldContainer.appendChild(dtWrapper);
+                    
+                    const dtConfig = { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true };
+                    if (field.name.includes('종료')) dtConfig.defaultDate = new Date().setHours(23,59,0,0);
+                    flatpickr(dtInput, dtConfig);
+                    
+                    dtUnlimitedCheck.onchange = () => {
+                        if (dtUnlimitedCheck.checked) {
+                            if (dtInput._flatpickr) dtInput._flatpickr.clear();
+                            dtInput.value = "무제한";
+                            dtInput.disabled = true;
+                        } else {
+                            dtInput.disabled = false;
+                            dtInput.value = "";
+                            flatpickr(dtInput, dtConfig);
+                        }
+                    };
+                    element = null;
+                    break;
+                case 'select':
+                    element = document.createElement('select');
+                    element.innerHTML = `<option value="">선택</option>` + field.options.map(o => `<option value="${o}">${o}</option>`).join('');
+                    // 2차 액션 팝업 등 서브필드 로직은 간소화를 위해 기본 select로 처리하거나 필요시 추가
+                    break;
+                case 'select-adType':
+                    element = document.createElement('select');
+                    element.innerHTML = `<option value="">광고 타입 선택</option>` + field.options.map(o => `<option value="${o}">${o}</option>`).join('');
+                    // 동적 필드 생성 로직 연결
+                    const adTypeSpecificContainer = document.createElement('div');
+                    adTypeSpecificContainer.id = 'copyCreationAdTypeContainer';
+                    adTypeSpecificContainer.style.marginTop = '15px';
+                    element.onchange = (e) => buildAdTypeSpecificModificationFields(e.target.value, adTypeSpecificContainer);
+                    fieldContainer.appendChild(element);
+                    fieldContainer.appendChild(adTypeSpecificContainer);
+                    element = null;
+                    break;
+                default:
+                    element = document.createElement('input');
+                    element.type = field.type;
+            }
+            if(element) {
+                element.name = field.name;
+                if(field.defaultValue) element.value = field.defaultValue;
+                fieldContainer.appendChild(element);
+            }
+        }
+
+        group.appendChild(fieldContainer);
+        container.appendChild(group);
+
+        checkbox.onchange = () => {
+            fieldContainer.style.display = checkbox.checked ? 'block' : 'none';
+        };
+    });
+}
+
+</script>

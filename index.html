@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <style>
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 20px; background-color: #f8f9fa; }
+    .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding-bottom: 120px; }
+    h1, h2, h3 { color: #333; }
+    .menu button, .submit-btn, .close-btn, .upload-btn { border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 14px; transition: background-color 0.2s; }
+    .menu button { padding: 12px 20px; font-size: 16px; background-color: #007bff; color: white; margin-right: 10px; margin-bottom: 10px; }
+    .submit-btn { background-color: #007bff; color: white; }
+    .upload-btn { background-color: #17a2b8; color: white; margin-left: 8px; }
+    .close-btn { background-color: #6c757d; color: white; }
+    .menu button:hover, .submit-btn:hover { background-color: #0056b3; }
+    .upload-btn:hover { background-color: #138496; }
+    .close-btn:hover { background-color: #5a6268; }
+    .sticky-footer { position: fixed; left: 0; bottom: 0; width: 100%; background-color: #f8f9fa; padding: 15px; box-shadow: 0 -2px 8px rgba(0,0,0,0.1); text-align: center; z-index: 100; box-sizing: border-box; }
+    .sticky-footer .submit-btn { font-size: 16px; padding: 12px 25px; }
+    .form-section { display: none; margin-top: 20px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group > label { display: block; font-weight: bold; margin-bottom: 8px; color: #555; }
+    .form-group input[type="text"], .form-group input[type="number"], .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: inherit; font-size: 1rem; }
+    .form-group textarea { resize: vertical; min-height: 80px; }
+    .form-group .required:after { content: " *"; color: red; }
+    .form-group .description { font-size: 12px; color: #6c757d; margin-top: 4px; }
+    .checkbox-group { padding: 5px 0; }
+    .checkbox-group label { margin-right: 15px; font-weight: normal; cursor: pointer; }
+    .checkbox-group input { vertical-align: middle; margin-right: 5px; }
+    .input-wrapper { display: flex; align-items: center; gap: 10px; }
+    .input-wrapper input { flex-grow: 1; }
+    .input-wrapper label { white-space: nowrap; font-weight: normal; cursor: pointer; }
+    .message { text-align: center; padding: 15px; font-size: 1em; border-radius: 5px; margin-top: 20px; opacity: 0; transition: opacity 0.5s ease-in-out; }
+    .message.success { opacity: 1; color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+    .message.error { opacity: 1; color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
+    .loader-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.7); display: flex; justify-content: center; align-items: center; z-index: 9999; display: none; }
+    .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #3498db; width: 60px; height: 60px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+    .modal-content {
+  background: white;
+  padding: 20px 30px;
+  border-radius: 8px;
+  width: 95%; /* 기존 90%에서 수정 */
+  max-width: 1400px; /* <-- 이 부분을 850px에서 1400px로 수정 */
+  max-height: 80vh;
+  overflow-y: auto;
+}
+    .modal-content h3 { margin-top: 0; word-break: break-all; }
+    .modal-summary { margin-bottom: 20px; font-size: 14px; }
+    .modal-summary table { width: 100%; border-collapse: collapse; }
+    .modal-summary th, .modal-summary td { border: 1px solid #ddd; padding: 8px; text-align: left; word-break: break-all; }
+    .modal-summary td {
+  word-break: break-all;
+  vertical-align: middle; /* <-- 내용을 세로 중앙 정렬하여 가독성 개선 */
+}
+.modal-summary table td:nth-child(4),
+.modal-summary table td:nth-child(5),
+.modal-summary table th:nth-child(4),
+.modal-summary table th:nth-child(5) {
+  white-space: nowrap;
+}
+    .modal-summary th { background-color: #f8f9fa; width: 30%; }
+    .modal-buttons { text-align: right; margin-top: 20px;}
+    .modal-buttons button { margin-left: 10px; }
+    .field-error-message { color: #dc3545; font-size: 12px; margin-top: 5px; font-weight: normal; }
+    
+    /* ▼▼▼▼▼ 검색 가능한 드롭다운 CSS 추가 ▼▼▼▼▼ */
+    .searchable-dropdown { position: relative; }
+    .searchable-dropdown .selected-value {
+      cursor: pointer;
+      background-color: #fff;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+      background-size: 16px 12px;
+      padding-right: 2.5rem;
+    }
+    .searchable-dropdown .options-panel {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      border: 1px solid #ccc;
+      background-color: #fff;
+      max-height: 250px;
+      overflow-y: auto;
+      z-index: 1050; /* 다른 요소 위에 표시되도록 z-index 설정 */
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      border-radius: 4px;
+      margin-top: 2px;
+    }
+    .searchable-dropdown .search-box {
+      width: 100%;
+      padding: 10px;
+      box-sizing: border-box;
+      border: none;
+      border-bottom: 1px solid #ccc;
+    }
+    .searchable-dropdown .options-list {
+      padding: 0;
+      margin: 0;
+    }
+    .searchable-dropdown .options-list .option {
+      padding: 10px;
+      cursor: pointer;
+      list-style: none;
+    }
+    .searchable-dropdown .options-list .option:hover {
+      background-color: #f0f0f0;
+    }
+    .submenu {
+  display: none;
+  padding-left: 10px;
+  border-left: 3px solid #007bff;
+  margin-left: 5px;
+}
+.submenu button {
+  background-color: #6c757d;
+  display: block;
+  width: calc(100% - 10px);
+  text-align: left;
+  margin-bottom: 10px;
+}
+.submenu button:hover {
+  background-color: #5a6268;
+}
+
+    .modification-field { border-left: 3px solid #17a2b8; padding-left: 15px; margin-top: 10px; display: none; }
+    .checkbox-field-group { margin-bottom: 15px; },
+
+    .dsp-media-inputs {
+    display: none; /* 기본적으로 숨김 */
+    flex-grow: 1;
+    gap: 10px;
+}
+.dsp-media-inputs > *, .dsp-media-inputs .input-wrapper {
+    flex: 1 1 0; /* 모든 입력 필드가 동일한 너비를 갖도록 함 */
+    min-width: 0; /* flex item이 줄어들 수 있도록 허용 */
+}
+
+#dspRegistrationSection .form-group {
+    /* DSP 폼의 요소 간격을 살짝 넓혀 가독성 개선 */
+    margin-bottom: 25px;
+}
+.dsp-pivot-container {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 5px;
+    /* 내용이 많아지면 가로 스크롤이 생기도록 처리 */
+    overflow-x: auto;
+}
+.dsp-pivot-header {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* 입력 필드와 간격을 일치시킴 */
+    margin-bottom: 10px;
+    padding-left: 280px;
+    font-weight: bold;
+    font-size: 13px;
+    color: #333;
+}
+.dsp-pivot-header > div {
+    text-align: center;
+    box-sizing: border-box;
+}
+/* 각 컬럼의 너비를 입력 필드와 정확하게 맞춤 */
+.dsp-pivot-header > div:nth-child(1) { width: 150px; }
+.dsp-pivot-header > div:nth-child(2) { width: 180px; }
+.dsp-pivot-header > div:nth-child(3) { width: 180px; }
+.dsp-pivot-header > div:nth-child(4) { width: 220px; }
+
+.file-upload-preview {
+  max-width: 100%;
+  max-height: 200px;
+  margin-top: 10px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  display: none; /* 기본적으로 숨김 */
+}
+
+  #pasteableTablePreviewContainer {
+    overflow-x: auto; /* 컨테이너에 가로 스크롤 생성 */
+    padding-bottom: 10px; /* 스크롤바가 내용과 겹치지 않도록 아래쪽 여백 추가 */
+  }
+  #pasteableTablePreviewContainer table {
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  #pasteableTablePreviewContainer th,
+  #pasteableTablePreviewContainer td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    white-space: nowrap; /* 텍스트가 줄바꿈되지 않고 한 줄로 표시되도록 변경 */
+  }
+  
+  </style>
+</head>
+<body>
+  <div id="loader" class="loader-overlay"><div class="loader"></div></div>
+
+  <div class="container">
+    <h1>광고 등록 요청 시스템</h1>
+    <p id="userInfo"></p>
+    <div class="menu">
+      <button onclick="showSection('adSection')">광고 등록</button>
+      <button onclick="showSection('loadSection')">데이터 불러오기</button>
+      <button onclick="toggleSubmenu('modificationSubmenu')">광고 수정</button>
+      <div id="modificationSubmenu" class="submenu">
+        <button onclick="showSection('modificationRequestSection')">수정 요청</button>
+        <button onclick="showSection('modificationLoadSection')">수정 불러오기</button>
+        <button onclick="showSection('modificationShareSection')">단순 수정 공유</button>
+        <button onclick="showSection('modificationSkipSection')" style="background-color: #ffc107; color: black;">수정 요청 스킵</button>
+        <button onclick="showSection('modificationRejectionSection')" style="background-color: #dc3545;">수정 요청 반려</button>
+      </div>
+      <button onclick="showSection('skipSection')">스킵 처리</button>
+      <button onclick="toggleSubmenu('copyCreationSubmenu')" style="background-color: #17a2b8;">복사 생성 요청</button>
+      <div id="copyCreationSubmenu" class="submenu">
+        <button onclick="showSection('copyCreationSection')">복사 생성 요청</button>
+        <button onclick="showSection('copyCreationLoadSection')">복사 생성 불러오기</button>
+        <button onclick="showSection('copyCreationSkipSection')" style="background-color: #ffc107; color: black;">복사 생성 요청 스킵</button>
+        <button onclick="showSection('copyCreationRejectionSection')" style="background-color: #dc3545;">복사 생성 요청 반려</button>
+      </div>
+      <button onclick="showSection('rejectionSection')" style="background-color: #dc3545;">반려</button>
+      <button onclick="showSection('couponRequestSection')" style="background-color: #17a2b8;">쿠폰발급요청</button>
+      <button onclick="showSection('otherRequestSection')" style="background-color: #20c997;">기타 요청</button>
+
+      <button onclick="toggleSubmenu('dspSubmenu')">DSP</button>
+       <div id="dspSubmenu" class="submenu" style="width: 250px;">
+         <button onclick="showSection('dspRegistrationSection')">DSP 광고 등록 요청</button>
+         <button onclick="showSection('dspLoadSection')">DSP 광고 불러오기</button>
+         <button onclick="showSection('dspSkipSection')" style="background-color: #ffc107; color: black;">DSP 등록 요청 스킵</button>
+         <button onclick="showSection('dspRejectionSection')" style="background-color: #dc3545;">DSP 등록 요청 반려</button>
+         <hr style="margin: 10px 0; border-color: #ddd;">
+         <button onclick="showSection('dspModificationRequestSection')">DSP 수정 요청</button>
+         <button onclick="showSection('dspModificationLoadSection')">DSP 수정 불러오기</button>
+         <button onclick="showSection('dspModificationSkipSection')" style="background-color: #ffc107; color: black;">DSP 수정 요청 스킵</button>
+         <button onclick="showSection('dspModificationRejectionSection')" style="background-color: #dc3545;">DSP 수정 요청 반려</button>
+       </div>
+
+
+      <button onclick="toggleSubmenu('cashslideSubmenu')">캐시슬라이드</button>
+       <div id="cashslideSubmenu" class="submenu" style="width: 250px;">
+         <button onclick="showSection('cashslideRegistrationSection')">캐시슬라이드 광고 등록 요청</button>
+         <button onclick="showSection('cashslideLoadSection')">캐시슬라이드 광고 불러오기</button>
+         <button onclick="showSection('cashslideSkipSection')" style="background-color: #ffc107; color: black;">캐시슬라이드 등록 요청 스킵</button>
+         <button onclick="showSection('cashslideRejectionSection')" style="background-color: #dc3545;">캐시슬라이드 등록 요청 반려</button>
+         <hr style="margin: 10px 0; border-color: #ddd;">
+         <button onclick="showSection('cashslideModificationRequestSection')">캐시슬라이드 수정 요청</button>
+         <button onclick="showSection('cashslideModificationLoadSection')">캐시슬라이드 수정 불러오기</button>
+         <button onclick="showSection('cashslideModificationSkipSection')" style="background-color: #ffc107; color: black;">캐시슬라이드 수정 요청 스킵</button>
+         <button onclick="showSection('cashslideModificationRejectionSection')" style="background-color: #dc3545;">캐시슬라이드 수정 요청 반려</button>
+       </div>
+
+      <button onclick="showSection('cxRequestSection')" style="background-color: #6f42c1;">CX팀 요청</button>
+
+      <button onclick="showSection('bdRequestSection')" style="background-color: #fd7e14;">오퍼월사업팀 요청</button>
+
+    </div>
+    <div id="message" class="message"></div>
+
+    <div id="rejectionSection" class="form-section">
+      <h2>등록 건 반려 처리</h2>
+      <div class="form-group">
+        <label class="required">반려할 광고 ID</label>
+        <input type="text" id="rejectionAdId" placeholder="예: 이름-2">
+      </div>
+      <div class="form-group">
+        <label>반려 사유 (선택)</label>
+        <textarea id="rejectionReason" placeholder="광고 등록자에게 발송될 메일에 포함됩니다." style="min-height: 100px;"></textarea>
+      </div>
+      <button class="submit-btn" onclick="submitRejection()" style="background-color: #dc3545;">반려 완료</button>
+    </div>
+
+    <div id="adSection" class="form-section">
+      <h2>광고 등록</h2>
+      <div class="form-group">
+        <label>광고 타입
+          <select id="adType" onchange="loadForm('광고', this.value)">
+            <option value="">선택하세요</option>
+            <option value="CPA S2S">CPA S2S</option>
+            <option value="CPI">CPI</option>
+            <option value="CPQ">CPQ</option>
+            <option value="CPA TRACKER">CPA TRACKER</option>
+            <option value="CPA SUBSCRIBE">CPA SUBSCRIBE</option>
+            <option value="CPA SUBSCRIBE 후지급">CPA SUBSCRIBE 후지급</option>
+            <option value="CPC">CPC</option>
+            <option value="CPA COUPON">CPA COUPON</option>
+            <option value="애드네트워크 연동형">애드네트워크 연동형</option>
+            <option value="네이버페이 알림받기">네이버페이 알림받기</option>
+            <option value="쿠키오븐 스마트스토어 CPS">쿠키오븐 스마트스토어 CPS</option>
+            <option value="완전 정률 - 쿠키오븐 스마트스토어 CPS">완전 정률 - 쿠키오븐 스마트스토어 CPS</option>
+            <option value="네이버페이 스마트스토어 CPS">네이버페이 스마트스토어 CPS</option>
+            <option value="네이버페이 CPS구매확정형_금액X">네이버페이 CPS구매확정형_금액X</option>
+            <option value="네이버페이 입점비">네이버페이 입점비</option>
+            <option value="멀티미션">멀티미션</option> 
+            <option value="테스트 광고">테스트 광고</option>
+          </select>
+        </label>
+      </div>
+      <form id="adForm"></form>
+    </div>
+
+    <div id="loadSection" class="form-section">
+      <h2>광고 등록ID로 불러오기 (시트의 제일 첫번째 열)</h2>
+      <div class="form-group">
+        <label>불러올 광고 등록ID
+          <input type="text" id="loadAdId" placeholder="예: 이름-2">
+        </label>
+      </div>
+      <button class="submit-btn" onclick="loadAdData()">데이터 불러오기</button>
+    </div>
+
+    <div id="skipSection" class="form-section">
+      <h2>등록 건 스킵 처리</h2>
+      <div class="form-group">
+        <label>스킵할 광고 ID
+          <input type="text" id="skipAdId" placeholder="예: 이름-2">
+        </label>
+      </div>
+      <button class="submit-btn" onclick="submitSkip()">스킵 요청</button>
+    </div>
+
+    <div id="modificationSkipSection" class="form-section">
+      <h2>수정 요청 스킵 처리</h2>
+      <div class="form-group">
+        <label class="required">스킵할 수정 ID</label>
+        <input type="text" id="modSkipId" placeholder="예: 이름-mod-2">
+      </div>
+      <button class="submit-btn" onclick="submitModificationSkip()" style="background-color: #ffc107; color: black;">스킵 요청</button>
+    </div>
+
+    <div id="modificationRejectionSection" class="form-section">
+      <h2>수정 요청 반려 처리</h2>
+      <div class="form-group">
+        <label class="required">반려할 수정 ID</label>
+        <input type="text" id="modRejectionId" placeholder="예: 이름-mod-2">
+      </div>
+      <div class="form-group">
+        <label>반려 사유 (선택)</label>
+        <textarea id="modRejectionReason" placeholder="수정 요청자에게 발송될 메일에 포함됩니다." style="min-height: 100px;"></textarea>
+      </div>
+      <button class="submit-btn" onclick="submitModificationRejection()" style="background-color: #dc3545;">반려 완료</button>
+    </div>
+
+    <div id="modificationShareSection" class="form-section">
+      <h2>수정 내용 공유</h2>
+      <form id="modificationShareForm">
+        <div class="form-group">
+          <label class="required">대상 광고 ID</label>
+          <textarea name="대상 광고 ID" required placeholder="수정할 광고의 ID를 입력하세요. (여러 개일 경우 줄바꿈하여 입력)"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="required">대상 광고명</label>
+          <textarea name="대상 광고명" required placeholder="수정할 광고의 이름을 입력하세요. (여러 개일 경우 줄바꿈하여 입력)"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="required">주요 공유사항</label>
+          <textarea name="주요 공유사항" required placeholder="수정 내용을 요약하여 입력하세요."></textarea>
+        </div>
+        <hr style="margin: 30px 0;">
+        <h3>세부 수정 항목 (선택)</h3>
+        <p style="font-size: 14px; color: #555;">변경되는 항목을 체크하고, 상세 내용을 입력해주세요.</p>
+        <div class="form-group">
+          <div class="checkbox-group">
+            <label><input type="checkbox" onchange="toggleModificationField(this, 'totalVolumeField')"> 총물량</label>
+          </div>
+          <div id="totalVolumeField" style="display: none;">
+            <textarea name="총물량" placeholder="총물량 변경 내용을 입력하세요."></textarea>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="checkbox-group">
+            <label><input type="checkbox" onchange="toggleModificationField(this, 'dailyVolumeField')"> 일물량</label>
+          </div>
+          <div id="dailyVolumeField" style="display: none;">
+            <textarea name="일물량" placeholder="일물량 변경 내용을 입력하세요."></textarea>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="checkbox-group">
+            <label><input type="checkbox" onchange="toggleModificationField(this, 'onOffField')"> ON / OFF</label>
+          </div>
+          <div id="onOffField" style="display: none;">
+            <textarea name="ON / OFF" placeholder="ON/OFF 변경 내용을 입력하세요. (예: 2025-07-24 18:00 OFF 요청)"></textarea>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="checkbox-group">
+            <label><input type="checkbox" onchange="toggleModificationField(this, 'targetAudienceField')"> 노출 대상</label>
+          </div>
+          <div id="targetAudienceField" style="display: none;">
+            <textarea name="노출 대상" placeholder="노출 대상 변경 내용을 입력하세요. (예: 모든 사용자 -> 테스트 사용자)"></textarea>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="checkbox-group">
+            <label><input type="checkbox" onchange="toggleModificationField(this, 'imageMaterialField')"> 이미지 소재</label>
+          </div>
+          <div id="imageMaterialField" style="display: none;">
+            <textarea name="이미지 소재" placeholder="이미지 소재 경로 또는 수정 내용을 입력하세요."></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div id="couponRequestSection" class="form-section">
+      <h2>쿠폰 발급 요청</h2>
+      <form id="couponRequestForm">
+        <div class="form-group">
+          <label class="required">대상 광고 ID</label>
+          <textarea name="대상 광고 ID" required placeholder="쿠폰을 발급할 광고의 ID를 입력하세요. (여러 개일 경우 줄바꿈하여 입력)"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="required">대상 광고명</label>
+          <textarea name="대상 광고명" required placeholder="쿠폰을 발급할 광고의 이름을 입력하세요. (여러 개일 경우 줄바꿈하여 입력)"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="required">쿠폰 금액</label>
+          <input type="text" name="쿠폰 금액" required>
+        </div>
+        <div class="form-group">
+          <label class="required">쿠폰 명</label>
+          <input type="text" name="쿠폰 명" required>
+        </div>
+        <div class="form-group">
+          <label class="required">쿠폰 발급 수량</label>
+          <input type="text" name="쿠폰 발급 수량" required>
+        </div>
+        <div class="form-group">
+          <label class="required">쿠폰 만료 일자</label>
+          <input type="text" id="couponExpiryDate" name="쿠폰 만료 일자" required placeholder="날짜를 선택하세요. (YYYY-MM-DD)">
+        </div>
+        <div class="form-group">
+          <label>추가 요청 사항</label>
+          <textarea name="추가 요청 사항"></textarea>
+        </div>
+      </form>
+    </div>
+
+    <div id="modificationRequestSection" class="form-section">
+      <h2>수정 요청</h2>
+      <form id="modificationRequestForm">
+        <h3>공통 항목 (기본)</h3>
+        <div class="form-group">
+          <label class="required">주요 요청사항</label>
+          <textarea name="주요 요청사항" required rows="10"></textarea>
+        </div>
+        <div class="form-group">
+          <label>대상 캠페인 ID</label>
+          <input type="text" name="대상 캠페인 ID">
+        </div>
+        <div class="form-group">
+          <label class="required">대상 광고 ID</label>
+          <textarea name="대상 광고 ID" required rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="required">대상 광고명</label>
+          <textarea name="대상 광고명" required rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="required">예약 반영 시점</label>
+          <textarea name="예약 반영 시점" required rows="3"></textarea>
+        </div>
+        <hr style="margin: 30px 0;">
+        <h3>공통 항목 (선택)</h3>
+        <p style="font-size: 14px; color: #555;">필요한 항목을 체크하고 내용을 입력해주세요.</p>
+        <div id="modificationFieldsContainer"></div>
+      </form>
+    </div>
+    
+    <div id="modificationLoadSection" class="form-section">
+        <h2>수정 요청 불러오기</h2>
+        <div class="form-group">
+            <label>불러올 수정 ID</label>
+            <input type="text" id="loadModificationId" placeholder="예: 이름-mod-2">
+        </div>
+        <button class="submit-btn" onclick="loadModificationData()">데이터 불러오기</button>
+    </div>
+
+    <div id="otherRequestSection" class="form-section">
+        <h2>기타 요청</h2>
+        <form id="otherRequestForm">
+          <div class="form-group">
+            <label class="required">광고주명</label>
+            <input type="text" name="광고주명" required>
+          </div>
+          <div class="form-group">
+            <label class="required">요청사항</label>
+            <textarea name="요청사항" required rows="10" placeholder="요청사항을 상세히 기재해주세요."></textarea>
+          </div>
+          <div class="form-group">
+            <label>선택항목</label>
+            <select name="선택항목" onchange="toggleOtherRequestSubform(this.value)">
+              <option value="">선택안함</option>
+              <option value="팝업요청">팝업요청</option>
+              <option value="배너요청">배너요청</option>
+              <option value="채널링요청">채널링요청</option>
+            </select>
+          </div>
+          <div id="otherRequestSubformContainer"></div>
+        </form>
+    </div>
+
+
+    <div id="copyCreationSection" class="form-section">
+      <h2>복사 생성 요청</h2>
+      <form id="copyCreationForm">
+        <div class="form-group">
+          <label class="required">주요 요청사항</label>
+          <textarea name="주요 요청사항" required rows="10" placeholder="10줄 이상 입력 가능, URL 및 특수문자(< >) 포함 가능"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="required">캠페인 ID</label>
+          <input type="text" name="캠페인 ID" required>
+        </div>
+        <div class="form-group">
+          <label class="required">복사 대상 광고 ID</label>
+          <input type="text" name="복사 대상 광고 ID" required>
+        </div>
+        <div class="form-group">
+          <label>수정 필요 광고 ID</label>
+          <input type="text" name="수정 필요 광고 ID">
+        </div>
+        <div class="form-group">
+          <label>수정 필요 광고명</label>
+          <input type="text" name="수정 필요 광고명">
+        </div>
+        
+        <hr style="margin: 30px 0;">
+        <h3>공통 항목 (선택)</h3>
+        <p style="font-size: 14px; color: #555;">수정이 필요한 경우 체크하고 내용을 입력해주세요.</p>
+        <div id="copyCreationFieldsContainer"></div>
+      </form>
+    </div>
+
+    <div id="copyCreationLoadSection" class="form-section">
+        <h2>복사 생성 불러오기</h2>
+        <div class="form-group">
+            <label>불러올 복사 생성 ID</label>
+            <input type="text" id="loadCopyCreationId" placeholder="예: copy-이름-1">
+        </div>
+        <button class="submit-btn" onclick="loadCopyCreationData()">데이터 불러오기</button>
+    </div>
+
+    <div id="copyCreationSkipSection" class="form-section">
+        <h2>복사 생성 요청 스킵 처리</h2>
+        <div class="form-group">
+            <label>스킵할 ID</label>
+            <input type="text" id="copySkipId" placeholder="예: copy-이름-1">
+        </div>
+        <button class="submit-btn" onclick="submitCopyCreationSkip()" style="background-color: #ffc107; color: black;">스킵 요청</button>
+    </div>
+
+    <div id="copyCreationRejectionSection" class="form-section">
+        <h2>복사 생성 요청 반려 처리</h2>
+        <div class="form-group">
+            <label class="required">반려할 ID</label>
+            <input type="text" id="copyRejectionId" placeholder="예: copy-이름-1">
+        </div>
+        <div class="form-group">
+            <label>반려 사유 (선택)</label>
+            <textarea id="copyRejectionReason" placeholder="반려 사유를 입력하세요." style="min-height: 100px;"></textarea>
+        </div>
+        <button class="submit-btn" onclick="submitCopyCreationRejection()" style="background-color: #dc3545;">반려 완료</button>
+    </div>
+
+    <div id="dspRegistrationSection" class="form-section">
+     <h2>DSP 광고 등록 요청</h2>
+     <div class="form-group">
+       <label>DSP 등록 타입
+         <select id="dspAdType" onchange="loadDspForm(this.value)">
+           <option value="">선택하세요</option>
+           <option value="DSP_광고주연동">DSP_광고주연동</option>
+           <option value="DSP_구독형(EVENT)">DSP_구독형(EVENT)</option>
+         </select>
+       </label>
+     </div>
+     <form id="dspForm"></form>
+    </div>
+
+    <div id="dspLoadSection" class="form-section">
+      <h2>DSP 광고 불러오기</h2>
+      <div class="form-group">
+        <label>불러올 DSP 광고 ID</label>
+        <input type="text" id="loadDspAdId" placeholder="예: dsp-이름-2">
+      </div>
+      <button class="submit-btn" onclick="loadDspAdData()">데이터 불러오기</button>
+    </div>
+
+    <div id="dspSkipSection" class="form-section">
+      <h2>DSP 등록 요청 스킵 처리</h2>
+      <div class="form-group">
+        <label>스킵할 DSP 광고 ID</label>
+        <input type="text" id="dspSkipAdId" placeholder="예: dsp-이름-2">
+      </div>
+      <button class="submit-btn" onclick="submitDspSkip()">스킵 요청</button>
+    </div>
+
+    <div id="dspRejectionSection" class="form-section">
+      <h2>DSP 등록 요청 반려 처리</h2>
+      <div class="form-group">
+        <label class="required">반려할 DSP 광고 ID</label>
+        <input type="text" id="dspRejectionAdId" placeholder="예: dsp-이름-2">
+      </div>
+      <div class="form-group">
+        <label>반려 사유 (선택)</label>
+        <textarea id="dspRejectionReason" placeholder="광고 등록자에게 발송될 메일에 포함됩니다." style="min-height: 100px;"></textarea>
+      </div>
+      <button class="submit-btn" onclick="submitDspRejection()" style="background-color: #dc3545;">반려 완료</button>
+    </div>
+
+    <div id="dspModificationRequestSection" class="form-section">
+      <h2>DSP 수정 요청</h2>
+      <form id="dspModificationRequestForm">
+        <h3>공통 항목 (필수)</h3>
+        <div class="form-group">
+          <label class="required">요청사항</label>
+          <textarea name="요청사항" required rows="5"></textarea>
+        </div>
+        <div class="form-group">
+          <label>대상 캠페인ID</label>
+          <input type="text" name="대상 캠페인ID">
+        </div>
+        <div class="form-group">
+          <label>대상 캠페인명</label>
+          <input type="text" name="대상 캠페인명">
+        </div>
+        <div class="form-group">
+          <label class="required">대상 광고ID</label>
+          <textarea name="대상 광고ID" required rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="required">대상 광고명</label>
+          <textarea name="대상 광고명" required rows="3"></textarea>
+        </div>
+
+        <hr style="margin: 30px 0;">
+        <h3>수정 항목 (선택)</h3>
+        <p style="font-size: 14px; color: #555;">필요한 항목을 체크하고 내용을 입력해주세요.</p>
+        <div id="dspModificationFieldsContainer"></div>
+      </form>
+    </div>
+    <div id="dspModificationLoadSection" class="form-section">
+      <h2>DSP 수정 불러오기</h2>
+      <div class="form-group">
+          <label>불러올 DSP 수정 ID</label>
+          <input type="text" id="loadDspModId" placeholder="예: dsp-mod-이름-1">
+      </div>
+      <button class="submit-btn" onclick="loadDspModificationData()">데이터 불러오기</button>
+    </div>
+    <div id="dspModificationSkipSection" class="form-section">
+      <h2>DSP 수정 요청 스킵 처리</h2>
+      <div class="form-group">
+        <label>스킵할 DSP 수정 ID</label>
+        <input type="text" id="dspModSkipId" placeholder="예: dsp-mod-이름-1">
+      </div>
+      <button class="submit-btn" onclick="submitDspModificationSkip()" style="background-color: #ffc107; color: black;">스킵 요청</button>
+    </div>
+    <div id="dspModificationRejectionSection" class="form-section">
+      <h2>DSP 수정 요청 반려 처리</h2>
+      <div class="form-group">
+        <label class="required">반려할 DSP 수정 ID</label>
+        <input type="text" id="dspModRejectionId" placeholder="예: dsp-mod-이름-1">
+      </div>
+      <div class="form-group">
+        <label>반려 사유 (선택)</label>
+        <textarea id="dspModRejectionReason" placeholder="수정 요청자에게 발송될 메일에 포함됩니다." style="min-height: 100px;"></textarea>
+      </div>
+      <button class="submit-btn" onclick="submitDspModificationRejection()" style="background-color: #dc3545;">반려 완료</button>
+    </div>
+
+    <div id="cashslideRegistrationSection" class="form-section">
+      <h2>캐시슬라이드 광고 등록 요청</h2>
+      <div class="form-group">
+        <label>광고 타입
+          <select id="cashslideAdType" onchange="loadCashslideForm(this.value)">
+            <option value="">선택하세요</option>
+            <option value="캐슬_노출형(기본)">캐슬_노출형(기본)</option>
+            <option value="캐슬_노출형(라방패키지)">캐슬_노출형(라방패키지)</option>
+            <option value="캐슬_노출형(라방패키지)_유튜브">캐슬_노출형(라방패키지)_유튜브</option>
+            <option value="캐슬_라이브적립">캐슬_라이브적립</option>
+            <option value="캐슬_노출형(홈앤쇼핑)">캐슬_노출형(홈앤쇼핑)</option>
+            <option value="캐슬_노출형(오토뷰)">캐슬_노출형(오토뷰)</option>
+            <option value="캐슬_노출형(맥스뷰)">캐슬_노출형(맥스뷰)</option>
+          </select>
+        </label>
+      </div>
+      <form id="cashslideForm"></form>
+    </div>
+
+    <div id="cashslideLoadSection" class="form-section">
+      <h2>캐시슬라이드 광고 불러오기</h2>
+      <div class="form-group">
+          <label>불러올 캐시슬라이드 광고 ID</label>
+          <input type="text" id="loadCashslideAdId" placeholder="예: cs-이름-1">
+      </div>
+      <button class="submit-btn" onclick="loadCashslideAdData()">데이터 불러오기</button>
+    </div>
+    <div id="cashslideSkipSection" class="form-section">
+      <h2>캐시슬라이드 등록 요청 스킵 처리</h2>
+      <div class="form-group">
+        <label>스킵할 캐시슬라이드 광고 ID</label>
+        <input type="text" id="cashslideSkipId" placeholder="예: cs-이름-1">
+      </div>
+      <button class="submit-btn" onclick="submitCashslideSkip()" style="background-color: #ffc107; color: black;">스킵 요청</button>
+    </div>
+    <div id="cashslideRejectionSection" class="form-section">
+      <h2>캐시슬라이드 등록 요청 반려 처리</h2>
+      <div class="form-group">
+        <label class="required">반려할 캐시슬라이드 광고 ID</label>
+        <input type="text" id="cashslideRejectionId" placeholder="예: cs-이름-1">
+      </div>
+      <div class="form-group">
+        <label>반려 사유 (선택)</label>
+        <textarea id="cashslideRejectionReason" placeholder="광고 등록자에게 발송될 메일에 포함됩니다." style="min-height: 100px;"></textarea>
+      </div>
+      <button class="submit-btn" onclick="submitCashslideRejection()" style="background-color: #dc3545;">반려 완료</button>
+    </div>
+    
+    <div id="cashslideModificationRequestSection" class="form-section">
+      <h2>캐시슬라이드 수정 요청</h2>
+      <form id="cashslideModificationRequestForm"></form>
+    </div>
+    <div id="cashslideModificationLoadSection" class="form-section">
+      <h2>캐시슬라이드 수정 불러오기</h2>
+      <div class="form-group">
+        <label>불러올 캐시슬라이드 수정 ID</label>
+        <input type="text" id="loadCashslideModId" placeholder="예: cs-이름-mod-1">
+      </div>
+      <button class="submit-btn" onclick="loadCashslideModificationData()">데이터 불러오기</button>
+    </div>
+
+    <div id="cashslideModificationSkipSection" class="form-section">
+      <h2>캐시슬라이드 수정 요청 스킵</h2>
+      <div class="form-group">
+        <label>스킵할 캐시슬라이드 수정 ID</label>
+        <input type="text" id="csModSkipId" placeholder="예: cs-이름-mod-1">
+      </div>
+      <button class="submit-btn" onclick="submitCashslideModificationSkip()" style="background-color: #ffc107; color: black;">스킵 요청</button>
+    </div>
+    
+    <div id="cashslideModificationRejectionSection" class="form-section">
+      <h2>캐시슬라이드 수정 요청 반려</h2>
+      <div class="form-group">
+        <label class="required">반려할 캐시슬라이드 수정 ID</label>
+        <input type="text" id="csModRejectionId" placeholder="예: cs-이름-mod-1">
+      </div>
+      <div class="form-group">
+        <label>반려 사유 (선택)</label>
+        <textarea id="csModRejectionReason" placeholder="수정 요청자에게 발송될 메일에 포함됩니다." style="min-height: 100px;"></textarea>
+      </div>
+      <button class="submit-btn" onclick="submitCashslideModificationRejection()" style="background-color: #dc3545;">반려 완료</button>
+    </div>
+
+    <div id="cxRequestSection" class="form-section">
+      <h2>CX팀 요청</h2>
+      <form id="cxRequestForm">
+        <div id="cxFormContainer"></div>
+      </form>
+    </div>
+
+    <div id="bdRequestSection" class="form-section">
+      <h2>오퍼월사업팀 요청</h2>
+      <form id="bdRequestForm">
+      </form>
+    </div>
+
+
+  </div> 
+  
+  <div id="confirmationModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3 id="modalTitle">입력 내용 확인</h3>
+      <div id="modalSummary" class="modal-summary"></div> 
+ 
+       <div class="form-group" style="margin-top: 20px; margin-bottom: 0;">
+         <label for="ccRecipients" style="font-weight: normal;">CC (참조, 여러 명은 쉼표로 구분)</label>
+         <input type="text" id="ccRecipients" placeholder="예: user1@nbt.com,user2@nbt.com" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+       </div>
+       <div class="modal-buttons"> 
+         <button onclick="closeConfirmationModal()" class="close-btn">취소</button> 
+         <button id="finalSubmitBtn" class="submit-btn">최종 확인 및 발송</button> 
+       </div>
+    </div>
+  </div>
+
+  <?!= include('JavaScript-Main'); ?>
+  <?!= include('JavaScript-FormBuilder'); ?>
+  <?!= include('JavaScript-EventListeners'); ?>
+  <?!= include('JavaScript-DataHandlers'); ?>
+  <?!= include('DSP_JavaScript'); ?>
+  <?!= include('Cashslide_JavaScript'); ?> 
+
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+</body>
+</html>

@@ -1,0 +1,1234 @@
+<script>
+  // ▼▼▼ [추가] 이 변수 선언을 파일 최상단에 추가해주세요. ▼▼▼
+  let allDspFormFieldsData = null;
+
+  function loadDspForm(dspSubType) {
+    const formElement = document.getElementById('dspForm');
+    formElement.innerHTML = '';
+    
+    const existingFooter = document.querySelector('.sticky-footer');
+    if (existingFooter) existingFooter.remove();
+    if (!dspSubType) return;
+
+    function buildAndSetupForm(subType) {
+      if (allDspFormFieldsData) {
+        const fieldInfo = allDspFormFieldsData['DSP'][subType];
+        if (fieldInfo && fieldInfo.fields) {
+          buildDspGenericForm('dspForm', fieldInfo.fields);
+        } else {
+          formElement.innerHTML = `<p>${subType} 폼은 현재 지원되지 않습니다.</p>`;
+        }
+      } else {
+        showMessage('폼 필드 데이터를 불러오는 데 실패했습니다.', 'error');
+      }
+    }
+
+    if (allDspFormFieldsData) {
+      buildAndSetupForm(dspSubType);
+    } else {
+      setLoading(true);
+      google.script.run
+        .withSuccessHandler(function(data) {
+          allDspFormFieldsData = data;
+          setLoading(false);
+          buildAndSetupForm(dspSubType);
+        })
+        .withFailureHandler(function(error){
+          setLoading(false);
+          handleError(error);
+        })
+        .getDspAllFormFields();
+    }
+  }
+
+ function buildDspGenericForm(formId, fields) {
+    const form = document.getElementById(formId);
+    form.innerHTML = '';
+    const dependencies = [];
+    const FormBuilder = {
+        createFormGroup(label, element, isRequired, description) {
+            const group = document.createElement('div');
+            group.className = 'form-group';
+            const labelEl = document.createElement('label');
+            if (isRequired) labelEl.className = 'required';
+            labelEl.textContent = label;
+            group.appendChild(labelEl);
+            if (typeof element === 'string') { group.insertAdjacentHTML('beforeend', element); } 
+            else { group.appendChild(element); }
+            if (description) {
+              const descEl = document.createElement('p');
+              descEl.className = 'description';
+              descEl.textContent = description;
+              group.appendChild(descEl);
+            }
+            return group;
+        },
+        createInput(name, type = 'text', placeholder = '', isRequired = false, value = '', readonly = false, allowFloat = false) {
+            return `<input type="${type}" name="${name}" placeholder="${placeholder}" ${isRequired ? 'required' : ''} value="${value}" ${readonly ? 'readonly' : ''} ${allowFloat ? 'step="any"' : ''}>`;
+        },
+        createTextarea(name, rows, placeholder, isRequired) {
+            return `<textarea name="${name}" rows="${rows}" placeholder="${placeholder || ''}" ${isRequired ? 'required' : ''}></textarea>`;
+        },
+        createSelect(name, options, isRequired) {
+            const optionsHtml = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+            return `<select name="${name}" ${isRequired ? 'required' : ''}><option value="">선택...</option>${optionsHtml}</select>`;
+        }
+    };
+    fields.forEach(field => {
+        if (field.dependency) { dependencies.push({ targetField: field.name, ...field.dependency }); }
+        if (field.type === 'searchable_dropdown') {
+            const dropdownNode = createSearchableDropdown({ name: field.name, required: field.required }, allDspFormFieldsData.dropdowns[field.optionsKey]);
+            form.appendChild(FormBuilder.createFormGroup(field.label, dropdownNode, field.required));
+            return;
+        }
+        let elementHtml = '';
+        let groupHtml = '';
+        switch (field.type) {
+            case 'heading': form.insertAdjacentHTML('beforeend', `<h3>${field.label}</h3><hr style="margin-bottom: 20px;">`); return;
+            case 'textarea': elementHtml = FormBuilder.createTextarea(field.name, field.rows, field.placeholder, field.required); break;
+            case 'text': case 'number': elementHtml = FormBuilder.createInput(field.name, field.type, field.placeholder, field.required, field.defaultValue, field.readonly, field.allowFloat); break;
+            case 'select': elementHtml = FormBuilder.createSelect(field.name, field.options, field.required); break;
+            case 'group_checkbox':
+                const subFieldsHtml = field.subFields.map(sf => {
+                    const subEl = (sf.type === 'select') ? FormBuilder.createSelect(sf.name, sf.options, sf.required) : FormBuilder.createInput(sf.name, 'text', sf.placeholder, sf.required, sf.defaultValue);
+                    return FormBuilder.createFormGroup(sf.label, subEl, sf.required).outerHTML;
+                }).join('');
+                groupHtml = `<div class="form-group"><label><input type="checkbox" name="${field.name}" value="TRUE"> ${field.label}</label><div class="modification-field" style="display:none; padding-left: 20px; border-left: 3px solid #eee; margin-top: 10px;">${subFieldsHtml}</div></div>`;
+                break;
+            case 'number_unlimited':
+                elementHtml = `<div class="input-wrapper"><input type="number" name="${field.name}" ${field.required ? 'required' : ''} ${field.allowFloat ? 'step="any"' : ''}><label><input type="checkbox" name="${field.name}_unlimited"> 무제한</label></div>`;
+                break;
+            case 'datetime_picker':
+                const unlimitedHtml = field.hasUnlimited ? `<label><input type="checkbox" name="${field.name}_unlimited"> 무제한</label>` : '';
+                elementHtml = `<div class="input-wrapper"><input type="text" name="${field.name}" data-default-time="${field.defaultTime}" ${field.required ? 'required' : ''}>${unlimitedHtml}</div>`;
+                break;
+            case 'media_pivot_table':
+                const mediaList = [
+                    'AdiSON Offerwall 웹툰', 'AdiSON Offerwall 시리즈', 'AdiSON Offerwall 캐시슬라이드', 'AdiSON Offerwall 토스', 'AdiSON Offerwall 기타',
+                    'Adison Offerwall 네이버페이',
+                    'OHC_IGAW', 'OHC_TNK', 'OHC_OKCASHBAG', 'OHC_KAKAO', 'OHC_기타',
+                    'SUCOMM_IGAW', 'SUCOMM_TNK', 'SUCOMM_KAKAO', 'SUCOMM_기타',
+                    '카카오엔터 캐시프렌즈', 'TNK_기타', 'NAP_기타',
+                    'Pincrux 기타', 'Pincrux 카카오페이지', 'Pincrux KB페이', 'Pincrux OK캐시백', 'Pincrux 하나머니', 'Pincrux 레진코믹스',
+                    'Greenp 기타'
+                ];
+                let mediaTableHtml = '<div class="dsp-pivot-container">';
+                mediaTableHtml += `
+<div class="dsp-pivot-header">
+    <div>매체 광고 단가</div>
+    <div>총물량</div>
+    <div>광고 시작일시</div>
+    <div>광고 종료일시</div>
+    <div>URL</div>
+</div>`;
+                mediaList.forEach((mediaName, index) => {
+mediaTableHtml += `
+<div class="form-group" style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+    <label style="flex: 0 0 250px; font-weight: normal; margin-bottom: 0;">
+        <input type="checkbox" name="media_checkbox" value="${mediaName}" data-index="${index}"> ${mediaName}
+    </label>
+    <div class="dsp-media-inputs" style="flex-grow: 1; display: none; gap: 10px;">
+        <input type="number" step="any" placeholder="매체 광고 단가" name="media_rate_${index}" style="width: 130px;">
+        <div class="input-wrapper" style="width: 160px;">
+            <input type="number" placeholder="총물량" name="media_total_volume_${index}">
+            <label><input type="checkbox" name="media_total_volume_unlimited_${index}"> 무</label>
+        </div>
+        <input type="text" placeholder="광고 시작일시" name="media_start_date_${index}" style="width: 160px;">
+        <div class="input-wrapper" style="width: 190px;">
+            <input type="text" placeholder="광고 종료일시" name="media_end_date_${index}">
+            <label><input type="checkbox" name="media_end_date_unlimited_${index}"> 무</label>
+        </div>
+        <input type="text" placeholder="URL" name="media_url_${index}" style="flex-grow: 1; min-width: 150px;">
+    </div>
+</div>`;
+                });
+                mediaTableHtml += '</div>';
+                form.insertAdjacentHTML('beforeend', mediaTableHtml);
+                return;
+        }
+        if (groupHtml) { form.insertAdjacentHTML('beforeend', groupHtml); } 
+        else { form.appendChild(FormBuilder.createFormGroup(field.label, elementHtml, field.required, field.description)); }
+    });
+    dependencies.forEach(dep => {
+      const sourceElement = form.querySelector(`[name="${dep.field}"]`);
+      const targetElement = form.querySelector(`[name="${dep.targetField}"]`);
+      if (sourceElement && targetElement) {
+        const parentGroup = targetElement.closest('.form-group');
+        const handleDependency = () => {
+          if (!parentGroup) return;
+          let isHidden = true;
+          if (dep.showsOn !== undefined) {
+            const showsOn = Array.isArray(dep.showsOn) ? dep.showsOn : [dep.showsOn];
+            isHidden = !showsOn.includes(sourceElement.value);
+          } else if (dep.hidesOn !== undefined) {
+            const hidesOn = Array.isArray(dep.hidesOn) ? dep.hidesOn : [dep.hidesOn];
+            isHidden = hidesOn.includes(sourceElement.value);
+          }
+          parentGroup.style.display = isHidden ? 'none' : 'block';
+          parentGroup.querySelectorAll('input, select, textarea').forEach(el => { el.disabled = isHidden; });
+        };
+        sourceElement.addEventListener('change', handleDependency);
+        handleDependency();
+      }
+    });
+    const footer = document.createElement('div');
+    footer.className = 'sticky-footer';
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'submit-btn';
+    submitBtn.textContent = 'DSP 등록 요청';
+    submitBtn.onclick = () => openDspConfirmationModal();
+    footer.appendChild(submitBtn);
+    document.body.appendChild(footer);
+    setupDspEventListeners();
+    const dspSubType = document.getElementById('dspAdType').value;
+    if (dspSubType === 'DSP_구독형(EVENT)') { setupDspSubscribeEventListeners(); }
+  }
+
+  function setupDspSubscribeEventListeners() {
+    // 대부분의 보이기/숨기기 로직은 buildDspGenericForm의 dependency 처리 로직으로 이동했습니다.
+    // 이 함수는 '팔로우' 타입의 URL 자동 생성과 같이 dependency로 처리하기 어려운
+    // 추가적인 상호작용이 필요할 때를 위해 사용됩니다. 현재는 특별한 로직이 필요 없습니다.
+  }
+
+ function setupDspEventListeners() {
+    const form = document.getElementById('dspForm');
+
+    // ▼▼▼ [수정] syncMainValues 함수를 함수 최상단으로 이동하여 스코프 문제 해결 ▼▼▼
+    const syncMainValues = (checkbox) => {
+        const mainAdRate = form.querySelector(`[name="광고 단가"]`);
+        const mainTotalVolume = form.querySelector(`[name="총물량"]`);
+        const mainTotalVolumeUnlimited = form.querySelector(`[name="총물량_unlimited"]`);
+        const mainStartDate = form.querySelector(`[name="광고 시작일시"]`);
+        const mainEndDate = form.querySelector(`[name="광고 종료일시"]`);
+        const mainEndDateUnlimited = form.querySelector(`[name="광고 종료일시_unlimited"]`);
+        
+        // 필수 요소가 없으면 중단
+        if (!mainAdRate || !mainTotalVolume || !mainStartDate || !mainEndDate || !mainTotalVolumeUnlimited || !mainEndDateUnlimited) return;
+
+        const index = checkbox.dataset.index;
+        const rowInputs = checkbox.closest('.form-group').querySelector('.dsp-media-inputs');
+        if(rowInputs) {
+          rowInputs.querySelector(`[name="media_rate_${index}"]`).value = mainAdRate.value;
+          
+          const mediaVolumeInput = rowInputs.querySelector(`[name="media_total_volume_${index}"]`);
+          const mediaVolumeUnlimited = rowInputs.querySelector(`[name="media_total_volume_unlimited_${index}"]`);
+          mediaVolumeUnlimited.checked = mainTotalVolumeUnlimited.checked;
+          mediaVolumeInput.value = mainTotalVolumeUnlimited.checked ? '' : mainTotalVolume.value;
+          mediaVolumeInput.disabled = mediaVolumeUnlimited.checked;
+
+          const mediaStartDateInput = rowInputs.querySelector(`[name="media_start_date_${index}"]`);
+          if(mediaStartDateInput._flatpickr) mediaStartDateInput._flatpickr.setDate(mainStartDate.value, false);
+          
+          const mediaEndDateInput = rowInputs.querySelector(`[name="media_end_date_${index}"]`);
+          const mediaEndDateUnlimited = rowInputs.querySelector(`[name="media_end_date_unlimited_${index}"]`);
+          mediaEndDateUnlimited.checked = mainEndDateUnlimited.checked;
+          mediaEndDateInput.disabled = mediaEndDateUnlimited.checked;
+          if (mediaEndDateUnlimited.checked) {
+              mediaEndDateInput.value = '무제한';
+              if(mediaEndDateInput._flatpickr) mediaEndDateInput._flatpickr.clear();
+          } else {
+              if(mediaEndDateInput._flatpickr) mediaEndDateInput._flatpickr.setDate(mainEndDate.value, false);
+          }
+        }
+    };
+    // ▲▲▲ [수정] 여기까지 ▲▲▲
+
+    form.querySelectorAll('[name$="_unlimited"]').forEach(unlimitedCheckbox => {
+      const name = unlimitedCheckbox.name.replace('_unlimited', '');
+      const input = form.querySelector(`input[name="${name}"]`);
+      if (!input) return;
+
+      const handleUnlimited = () => {
+        const isUnlimited = unlimitedCheckbox.checked;
+        input.disabled = isUnlimited;
+        if(input.hasAttribute('required')) {
+          input.required = !isUnlimited;
+        }
+        if (isUnlimited) {
+          if (input._flatpickr) input._flatpickr.clear();
+          input.value = '무제한';
+        } else {
+          if (input.value === '무제한') {
+            input.value = '';
+          }
+          if(input._flatpickr) {
+            const defaultTime = input.dataset.defaultTime || '00:00';
+            const date = new Date();
+            const [h, m] = defaultTime.split(':');
+            date.setHours(h, m, 0, 0);
+            input._flatpickr.setDate(date, true);
+          }
+        }
+      };
+      
+      unlimitedCheckbox.addEventListener('change', handleUnlimited);
+      handleUnlimited(); // 초기 상태 설정
+    });
+
+    form.querySelectorAll('input[data-default-time]').forEach(pickerInput => {
+        const defaultTime = pickerInput.dataset.defaultTime || '00:00';
+        const date = new Date();
+        const [h, m] = defaultTime.split(':');
+        date.setHours(h, m, 0, 0);
+        flatpickr(pickerInput, { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, defaultDate: date });
+    });
+
+    const totalVolumeInput = form.querySelector('[name="총물량"]');
+    const adRateInput = form.querySelector('[name="광고 단가"]');
+    const totalBudgetInput = form.querySelector('[name="총예산"]');
+    if (totalVolumeInput && adRateInput && totalBudgetInput) {
+      const totalVolumeUnlimited = form.querySelector('[name="총물량_unlimited"]');
+      const calculateBudget = () => {
+          if (totalVolumeUnlimited && totalVolumeUnlimited.checked) {
+              totalBudgetInput.value = '무제한';
+              return;
+          }
+          const volume = parseFloat(totalVolumeInput.value) || 0;
+          const rate = parseFloat(adRateInput.value) || 0;
+          totalBudgetInput.value = (volume * rate).toLocaleString();
+      };
+      totalVolumeInput.addEventListener('input', calculateBudget);
+      adRateInput.addEventListener('input', calculateBudget);
+      if (totalVolumeUnlimited) totalVolumeUnlimited.addEventListener('change', calculateBudget);
+    }
+
+    form.querySelectorAll('input[type="checkbox"][value="TRUE"]').forEach(checkbox => {
+        const subfieldContainer = checkbox.closest('.form-group').querySelector('.modification-field');
+        if(subfieldContainer) {
+            const handleToggle = () => {
+                subfieldContainer.style.display = checkbox.checked ? 'block' : 'none';
+                subfieldContainer.querySelectorAll('input, select').forEach(el => {
+                    el.disabled = !checkbox.checked;
+                    if(allDspFormFieldsData){
+                      const formType = document.getElementById('dspAdType').value;
+                      const parentFieldDef = allDspFormFieldsData.DSP[formType].fields.find(f => f.name === checkbox.name);
+                      if(parentFieldDef && parentFieldDef.subFields){
+                        const subFieldDef = parentFieldDef.subFields.find(sf => sf.name === el.name);
+                        if(subFieldDef) el.required = checkbox.checked && subFieldDef.required;
+                      }
+                    }
+                });
+            };
+            checkbox.addEventListener('change', handleToggle);
+            handleToggle();
+        }
+    });
+
+    const mainAdRate = form.querySelector(`[name="광고 단가"]`);
+    const mainTotalVolume = form.querySelector(`[name="총물량"]`);
+    const mainTotalVolumeUnlimited = form.querySelector(`[name="총물량_unlimited"]`);
+    const mainStartDate = form.querySelector(`[name="광고 시작일시"]`);
+    const mainEndDate = form.querySelector(`[name="광고 종료일시"]`);
+    const mainEndDateUnlimited = form.querySelector(`[name="광고 종료일시_unlimited"]`);
+    
+    if(mainAdRate && mainTotalVolume && mainStartDate && mainEndDate){
+      [mainAdRate, mainTotalVolume, mainStartDate, mainEndDate].forEach(el => el.addEventListener('input', () => form.querySelectorAll('input[name="media_checkbox"]:checked').forEach(syncMainValues)));
+      [mainTotalVolumeUnlimited, mainEndDateUnlimited].forEach(el => el.addEventListener('change', () => form.querySelectorAll('input[name="media_checkbox"]:checked').forEach(syncMainValues)));
+    }
+
+    form.querySelectorAll('input[name="media_checkbox"]').forEach((checkbox) => {
+      const index = checkbox.dataset.index;
+      const rowInputs = checkbox.closest('.form-group').querySelector('.dsp-media-inputs');
+      if (rowInputs) {
+        const mediaStartDate = rowInputs.querySelector(`[name="media_start_date_${index}"]`);
+        const mediaEndDate = rowInputs.querySelector(`[name="media_end_date_${index}"]`);
+        flatpickr(mediaStartDate, { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true });
+        flatpickr(mediaEndDate, { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true });
+        const mediaVolumeUnlimited = rowInputs.querySelector(`[name="media_total_volume_unlimited_${index}"]`);
+        const mediaEndDateUnlimited = rowInputs.querySelector(`[name="media_end_date_unlimited_${index}"]`);
+        mediaVolumeUnlimited.addEventListener('change', () => { rowInputs.querySelector(`[name="media_total_volume_${index}"]`).disabled = mediaVolumeUnlimited.checked; });
+        mediaEndDateUnlimited.addEventListener('change', () => { mediaEndDate.disabled = mediaEndDateUnlimited.checked; });
+        checkbox.addEventListener('change', () => {
+          rowInputs.style.display = checkbox.checked ? 'flex' : 'none';
+          if(checkbox.checked) syncMainValues(checkbox);
+        });
+      }
+    });
+  }
+
+function openDspConfirmationModal() {
+    const form = document.getElementById('dspForm');
+    if (!form.checkValidity()) {
+      showMessage('모든 필수 항목(*)을 입력해주세요.', 'error');
+      form.reportValidity();
+      return;
+    }
+    
+    currentFormData = {};
+    const mediaSettings = [];
+
+    const formData = new FormData(form);
+    for(const [key, value] of formData.entries()) {
+      if(value) {
+          if (currentFormData.hasOwnProperty(key)) {
+            if (!Array.isArray(currentFormData[key])) {
+                currentFormData[key] = [currentFormData[key]];
+            }
+            currentFormData[key].push(value);
+        } else {
+            currentFormData[key] = value;
+        }
+      }
+    }
+    
+    form.querySelectorAll('input[name="media_checkbox"]:checked').forEach(checkbox => {
+        const index = checkbox.dataset.index;
+        const row = checkbox.closest('.form-group');
+        const rate = row.querySelector(`[name="media_rate_${index}"]`).value;
+        const volumeInput = row.querySelector(`[name="media_total_volume_${index}"]`);
+        const volumeUnlimited = row.querySelector(`[name="media_total_volume_unlimited_${index}"]`).checked;
+        const start = row.querySelector(`[name="media_start_date_${index}"]`).value;
+        const endInput = row.querySelector(`[name="media_end_date_${index}"]`);
+        const endUnlimited = row.querySelector(`[name="media_end_date_unlimited_${index}"]`).checked;
+
+        mediaSettings.push({
+            "매체명": checkbox.value,
+            "단가": rate,
+            "총물량": volumeUnlimited ? "무제한" : volumeInput.value,
+            "시작일시": start,
+            "종료일시": endUnlimited ? "무제한" : endInput.value,
+            "URL": row.querySelector(`[name="media_url_${index}"]`).value || '' // URL 값 추가
+        });
+    });
+    // 서버 전송을 위해 JSON 데이터는 계속 생성합니다.
+    currentFormData['mediaSettingsJson'] = JSON.stringify(mediaSettings, null, 2);
+
+    // DSP 등록 타입에 따라 제목과 본문 구성을 다르게 합니다.
+    const dspSubType = document.getElementById('dspAdType').value;
+    currentFormData['dspSubType'] = dspSubType; // 서버에 타입을 알려주기 위해 추가
+
+    const fieldsToEscape = ['요청사항', '가이드 메세지', '버튼 메세지'];
+    
+    let summaryHtml = '<h4>기본 정보</h4><table>';
+    let fieldsToShow = [];
+
+    if (allDspFormFieldsData && allDspFormFieldsData.DSP[dspSubType]) {
+        fieldsToShow = allDspFormFieldsData.DSP[dspSubType].fields;
+    }
+
+    fieldsToShow.forEach(field => {
+        let rawValue = currentFormData[field.name];
+        if (rawValue === undefined) return;
+
+        let displayValue = String(rawValue);
+        if (fieldsToEscape.includes(field.name)) {
+          displayValue = displayValue.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        if (field.type === 'group_checkbox') {
+            if (rawValue) {
+                 summaryHtml += `<tr><th>${field.label}</th><td>체크됨</td></tr>`;
+                 // 하위 필드들도 표시
+                 field.subFields.forEach(sf => {
+                     if(currentFormData[sf.name]) {
+                        summaryHtml += `<tr><th style="padding-left: 25px;"> L ${sf.label}</th><td>${String(currentFormData[sf.name]).replace(/\n/g, '<br>')}</td></tr>`;
+                     }
+                 });
+            }
+        } else if (field.type !== 'heading' && field.type !== 'media_pivot_table') {
+            summaryHtml += `<tr><th>${field.label}</th><td>${displayValue.replace(/\n/g, '<br>')}</td></tr>`;
+        }
+    });
+    summaryHtml += '</table><h4>매체별 상세 설정</h4>';
+
+    // 매체별 상세 설정을 JSON이 아닌 테이블 형태로 표시
+    if (mediaSettings.length > 0) {
+      summaryHtml += `<table style="width:100%; border-collapse: collapse; font-size: 12px;">
+                        <thead><tr style="background-color:#f8f9fa;">
+                          <th style="border: 1px solid #ddd; padding: 6px;">매체명</th>
+                          <th style="border: 1px solid #ddd; padding: 6px;">단가</th>
+                          <th style="border: 1px solid #ddd; padding: 6px;">총물량</th>
+                          <th style="border: 1px solid #ddd; padding: 6px;">시작일시</th>
+                          <th style="border: 1px solid #ddd; padding: 6px;">종료일시</th>
+                          <th style="border: 1px solid #ddd; padding: 6px;">URL</th>
+                        </tr></thead><tbody>`;
+      mediaSettings.forEach(setting => {
+        summaryHtml += `<tr>
+                          <td style="border: 1px solid #ddd; padding: 6px;">${setting['매체명']}</td>
+                          <td style="border: 1px solid #ddd; padding: 6px;">${setting['단가']}</td>
+                          <td style="border: 1px solid #ddd; padding: 6px;">${setting['총물량']}</td>
+                          <td style="border: 1px solid #ddd; padding: 6px;">${setting['시작일시']}</td>
+                          <td style="border: 1px solid #ddd; padding: 6px;">${setting['종료일시']}</td>
+                          <td style="border: 1px solid #ddd; padding: 6px; word-break: break-all; white-space: nowrap;">${setting['URL'] || ''}</td>
+                        </tr>`;
+      });
+      summaryHtml += `</tbody></table>`;
+    } else {
+      summaryHtml += `<p>선택된 매체가 없습니다.</p>`;
+    }
+
+    // DSP 타입에 따라 모달 제목을 다르게 설정
+    let modalTitle = '';
+    if (dspSubType === 'DSP_구독형(EVENT)') {
+      const subscribeType = currentFormData['구독 대상 이름'] || '';
+      modalTitle = `[DSP] ${currentFormData['캠페인명']} ${currentFormData['광고명']}_${subscribeType}`;
+    } else {
+      modalTitle = `[DSP] ${currentFormData['캠페인명']} ${currentFormData['광고명']}`;
+    }
+    document.getElementById('modalTitle').textContent = modalTitle;
+    document.getElementById('modalSummary').innerHTML = summaryHtml;
+
+    const finalSubmitBtn = document.getElementById('finalSubmitBtn');
+    const newBtn = finalSubmitBtn.cloneNode(true);
+    finalSubmitBtn.parentNode.replaceChild(newBtn, finalSubmitBtn);
+    newBtn.addEventListener('click', submitDspRegistrationRequest);
+
+    document.getElementById('confirmationModal').style.display = 'flex';
+    window.addEventListener('keydown', handleEscapeForConfirmationModal);
+  }
+
+
+  function submitDspRegistrationRequest() {
+      currentFormData.ccRecipients = document.getElementById('ccRecipients').value.trim();
+      setLoading(true);
+      closeConfirmationModal();
+      google.script.run
+          .withSuccessHandler(function(response) {
+              setLoading(false);
+              if (response.success) {
+                  showMessage(response.message, 'success');
+                  setTimeout(() => {
+                      alert(response.message);
+                      document.getElementById('dspForm').innerHTML = '';
+                      document.getElementById('dspAdType').value = '';
+                      const footer = document.querySelector('.sticky-footer');
+                      if(footer) footer.remove();
+                  }, 0);
+              } else {
+                  showMessage(response.message, 'error');
+              }
+          })
+          .withFailureHandler(handleError)
+          .submitDspRegistration(currentFormData);
+  }
+
+
+ function loadDspAdData() {
+    const dspId = document.getElementById('loadDspAdId').value.trim();
+    if (!dspId) { showMessage('불러올 DSP 광고 ID를 입력해주세요.', 'error'); return; }
+    setLoading(true);
+    google.script.run
+      .withSuccessHandler(function(data) {
+        setLoading(false);
+        if (data) {
+          populateDspFormWithData(data);
+        } else {
+          showMessage(`ID '${dspId}'에 해당하는 DSP 광고를 찾을 수 없습니다.`, 'error');
+        }
+      })
+      .withFailureHandler(handleError)
+      .getDspAdDataById(dspId);
+  }
+
+ function populateDspFormWithData(data) {
+    const adType = data.ad_type;
+    let formTemplateType = '';
+    if (['CPI', 'CPA S2S', 'CPA TRACKER'].includes(adType)) { formTemplateType = 'DSP_광고주연동'; } 
+    else if (adType === 'CPA S2S_Event') { formTemplateType = 'DSP_구독형(EVENT)'; } 
+    else { showMessage(`'${adType}' 타입의 광고를 불러오는 기능은 아직 지원되지 않습니다.`, 'error'); return; }
+
+    showSection('dspRegistrationSection');
+    document.getElementById('dspAdType').value = formTemplateType;
+    loadDspForm(formTemplateType);
+
+    setTimeout(() => {
+      const form = document.getElementById('dspForm');
+      const headerToNameMap = {
+        'request_details': '요청사항', 'advertiser': '광고주', 'campaign_name': '캠페인명', 'ad_name': '광고명', 'ad_type': '광고 타입', 're_participation_type': '재참여 타입', 'tracker': '트래커', 'event_name': '완료 이벤트 이름', 'event_token': '이벤트 토큰', 'event_condition_json': '완료 이벤트 조건(event_parameters JSON 파라미터)', 'event_condition_json_type': '완료 이벤트 조건(event_parameters JSON 파라미터) 이벤트 타입', 'event_condition_json_name': '완료 이벤트 조건(event_parameters JSON 파라미터) 이벤트 이름', 'event_condition_json_value': '완료 이벤트 조건(event_parameters JSON 파라미터) value', 'event_condition_json_from': '완료 이벤트 조건(event_parameters JSON 파라미터) from', 'event_condition_json_to': '완료 이벤트 조건(event_parameters JSON 파라미터) to', 'event_condition_individual': '완료 이벤트 조건 (개별 파라미터)', 'event_condition_individual_type': '완료 이벤트 조건 (개별 파라미터) 파라미터 타입', 'event_condition_individual_name': '완료 이벤트 조건 (개별 파라미터) 파라미터 이름', 'event_condition_individual_value': '완료 이벤트 조건 (개별 파라미터) value', 'event_condition_individual_from': '완료 이벤트 조건 (개별 파라미터) from', 'event_condition_individual_to': '완료 이벤트 조건 (개별 파라미터) to', 'landing_url': '랜딩 URL', 'validity_period': '완료 인정 유효기간 (일단위)', 'total_volume': '총물량', 'daily_volume': '일물량', 'ad_rate': '광고 단가', 'total_budget': '총예산', 'start_date': '광고 시작일시', 'end_date': '광고 종료일시', 'subscribe_target': '구독 대상 이름', 'image_recognition_id': '이미지 인식에 사용할 식별자', 'account_id_1': '광고주 계정 식별자 1', 'account_id_2': '광고주 계정 식별자 2', 'account_id_3': '광고주 계정 식별자 3', 'guide_message': '가이드 메세지', 'button_message': '버튼 메세지', 'subscribe_page_url': '구독 페이지 랜딩 URL', 'example_image_url': '이미지 인식 예시 이미지',
+        'advertiser_link_token': '광고주 연동 토큰'
+      };
+
+      for (const key in data) {
+        // ▼▼▼ [로그 2] ▼▼▼
+        if (key === 'total_volume' || key === 'daily_volume') {
+          
+          const formFieldName = headerToNameMap[key];
+          const element = form.querySelector(`[name="${formFieldName}"]`);
+          const unlimitedCheckbox = form.querySelector(`[name="${formFieldName}_unlimited"]`);
+        }
+
+        const formFieldName = headerToNameMap[key];
+        if (!formFieldName) continue;
+        const value = data[key];
+        if (value === null || String(value).trim() === '') continue;
+
+
+        if (key === 'total_volume' || key === 'daily_volume') {
+            const formFieldName = headerToNameMap[key]; // 예: '총물량' 또는 '일물량'
+            const numInputElement = form.querySelector(`input[name="${formFieldName}"][type="number"]`);
+            const unlimitedCheckboxElement = form.querySelector(`input[name="${formFieldName}_unlimited"][type="checkbox"]`);
+
+            if (numInputElement && unlimitedCheckboxElement) {
+                if (value === '무제한') {
+                    unlimitedCheckboxElement.checked = true;
+                    numInputElement.value = ''; // 숫자 필드는 비움
+                    numInputElement.disabled = true;
+                } else {
+                    unlimitedCheckboxElement.checked = false;
+                    numInputElement.value = value; // 숫자 필드에 값 설정
+                    numInputElement.disabled = false;
+                }
+                // 체크박스 상태 변경 후 change 이벤트 발생시켜 UI 업데이트
+                unlimitedCheckboxElement.dispatchEvent(new Event('change', { bubbles: true }));
+                continue; // 이 필드 처리는 여기서 종료
+            }
+        }
+
+        const element = form.querySelector(`[name="${formFieldName}"]`);
+        if (!element) continue;
+
+        const unlimitedCheckbox = form.querySelector(`[name="${formFieldName}_unlimited"]`);
+        if (element.type === 'number' && unlimitedCheckbox) {
+          if (value === '무제한') { unlimitedCheckbox.checked = true; } 
+          else { unlimitedCheckbox.checked = false; element.value = value; }
+          unlimitedCheckbox.dispatchEvent(new Event('change'));
+          continue;
+        }
+        const parentDiv = element.parentElement;
+        if (parentDiv && parentDiv.classList.contains('searchable-dropdown')) {
+          const visibleInput = parentDiv.querySelector('.selected-value');
+          element.value = value;
+          if (visibleInput) visibleInput.value = value;
+          continue;
+        }
+        if (element.type === 'checkbox' && element.value === 'TRUE') {
+          element.checked = (String(value).toUpperCase() === 'TRUE');
+          if (element.checked) { element.dispatchEvent(new Event('change', { bubbles: true })); }
+          continue; 
+        }
+        if (element.hasAttribute('data-default-time')) {
+           const dateUnlimitedCheckbox = element.parentElement.querySelector('[name$="_unlimited"]');
+           if (value === '무제한') { if(dateUnlimitedCheckbox) dateUnlimitedCheckbox.checked = true; } 
+           else if(element._flatpickr) { element._flatpickr.setDate(value, true); }
+           if (dateUnlimitedCheckbox) dateUnlimitedCheckbox.dispatchEvent(new Event('change'));
+           continue;
+        }
+        element.value = value;
+        if (element.tagName === 'SELECT') { element.dispatchEvent(new Event('change', { bubbles: true })); }
+      }
+      
+      // 매체별 상세 설정 채우기
+      if (data.media_settings_json) {
+        const mediaSettings = JSON.parse(data.media_settings_json);
+        mediaSettings.forEach(setting => {
+          const checkbox = form.querySelector(`input[name="media_checkbox"][value="${setting.매체명}"]`);
+          if (checkbox) {
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change'));
+            
+            const index = checkbox.dataset.index;
+            const row = checkbox.closest('.form-group');
+            row.querySelector(`[name="media_rate_${index}"]`).value = setting.단가;
+            
+            const vInput = row.querySelector(`[name="media_total_volume_${index}"]`);
+            const vUnlimited = row.querySelector(`[name="media_total_volume_unlimited_${index}"]`);
+            if(setting.총물량 === '무제한') vUnlimited.checked = true; else vInput.value = setting.총물량;
+            vUnlimited.dispatchEvent(new Event('change'));
+
+            const sDate = row.querySelector(`[name="media_start_date_${index}"]`);
+            if(sDate._flatpickr) sDate._flatpickr.setDate(setting.시작일시, true);
+
+            const eDate = row.querySelector(`[name="media_end_date_${index}"]`);
+            const eUnlimited = row.querySelector(`[name="media_end_date_unlimited_${index}"]`);
+            if(setting.종료일시 === '무제한') eUnlimited.checked = true; else if(eDate._flatpickr) eDate._flatpickr.setDate(setting.종료일시, true);
+            eUnlimited.dispatchEvent(new Event('change'));
+            const urlInput = row.querySelector(`[name="media_url_${index}"]`);
+            if (urlInput) {
+                urlInput.value = setting['URL'] || '';
+            }
+          }
+        });
+      }
+
+      showMessage('DSP 광고 데이터를 성공적으로 불러왔습니다.', 'success');
+    }, 500);
+  }
+
+
+  function submitDspRejection() {
+    const dspId = document.getElementById('dspRejectionAdId').value.trim();
+    const reason = document.getElementById('dspRejectionReason').value.trim();
+
+    if (!dspId) {
+      showMessage('반려할 DSP 광고 ID를 입력해주세요.', 'error');
+      return;
+    }
+
+    setLoading(true);
+    google.script.run
+      .withSuccessHandler(function(response) {
+        setLoading(false);
+        if (response.success) {
+          showMessage(response.message, 'success');
+          alert(response.message);
+          document.getElementById('dspRejectionAdId').value = '';
+          document.getElementById('dspRejectionReason').value = '';
+        } else {
+          showMessage(response.message, 'error');
+        }
+      })
+      .withFailureHandler(handleError)
+      .processDspRejection(dspId, reason);
+  }
+
+  function submitDspSkip() {
+    const dspId = document.getElementById('dspSkipAdId').value.trim();
+    if (!dspId) {
+      showMessage('스킵할 DSP 광고 ID를 입력해주세요.', 'error');
+      return;
+    }
+
+    setLoading(true);
+    google.script.run
+      .withSuccessHandler(function(response) {
+        setLoading(false);
+        if (response.success) {
+          showMessage(response.message, 'success');
+          alert(response.message);
+          document.getElementById('dspSkipAdId').value = '';
+        } else {
+          showMessage(response.message, 'error');
+        }
+      })
+      .withFailureHandler(handleError)
+      .processDspSkip(dspId);
+  }
+
+
+
+function buildDspModificationRequestForm() {
+  const form = document.getElementById('dspModificationRequestForm');
+  form.reset(); // 폼 초기화 추가
+
+  const container = document.getElementById('dspModificationFieldsContainer');
+  container.innerHTML = ''; // 컨테이너 초기화
+
+  // DSP 수정 필드 정의 (기존 정의 사용)
+  const fields = [
+    { name: '광고 타입', type: 'select', options: ['CPI', 'CPA S2S', 'CPA TRACKER'], required: true },
+    { name: '랜딩 URL', type: 'text' },
+    { name: '광고 단가', type: 'text' }, // 타입 number 대신 text 사용 (DSP는 문자열 포함 가능성)
+    { name: '총물량', type: 'number_unlimited', required: true }, // required 속성 유지
+    { name: '일물량', type: 'number_unlimited', required: true }, // required 속성 유지
+    { name: '광고 시작일시', type: 'datetime_picker', defaultTime: { h: 0, m: 0 } },
+    { name: '광고 종료일시', type: 'datetime_picker_unlimited', defaultTime: { h: 23, m: 59 } },
+    { name: 'Event(구독형) 식별자', type: 'text' },
+    { name: 'Event(구독형) 가이드 메세지', type: 'text' },
+    { name: 'Event(구독형) 타이틀 메세지', type: 'text' },
+    { name: 'Event(구독형) 버튼 메세지', type: 'text' },
+    { name: '기타 요청', type: 'textarea', rows: 5 }
+  ];
+
+  fields.forEach(field => {
+    const group = document.createElement('div');
+    group.className = 'checkbox-field-group';
+
+    const label = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(` ${field.name}`));
+    // 라벨에 required 클래스 추가 (시각적 표시용)
+    if (field.required) {
+        label.classList.add('required');
+    }
+    group.appendChild(label);
+
+    const fieldContainer = document.createElement('div');
+    fieldContainer.className = 'modification-field form-group';
+    fieldContainer.style.marginBottom = '0';
+    fieldContainer.style.display = 'none'; // 초기 상태 숨김
+
+    let element;
+
+    switch(field.type) {
+      case 'textarea':
+        element = document.createElement('textarea');
+        element.rows = field.rows || 3;
+        if(field.placeholder) element.placeholder = field.placeholder;
+        fieldContainer.appendChild(element);
+        break;
+
+      case 'select':
+        element = document.createElement('select');
+        element.innerHTML = `<option value="">선택</option>` + field.options.map(o => `<option value="${o}">${o}</option>`).join('');
+        fieldContainer.appendChild(element);
+        break;
+
+      case 'number_unlimited':
+        const numWrapper = document.createElement('div');
+        numWrapper.className = 'input-wrapper';
+        element = document.createElement('input');
+        element.type = 'number'; // 숫자 입력 필드
+
+        const unlimitedLabel = document.createElement('label');
+        const unlimitedCheckbox = document.createElement('input');
+        unlimitedCheckbox.type = 'checkbox';
+        unlimitedCheckbox.name = `${field.name}_unlimited`; // name 속성 부여
+        unlimitedLabel.appendChild(unlimitedCheckbox);
+        unlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+
+        unlimitedCheckbox.addEventListener('change', () => {
+          element.disabled = unlimitedCheckbox.checked; // disabled 상태만 제어
+          element.required = !unlimitedCheckbox.checked && field.required; // required 상태 제어
+        });
+
+        numWrapper.appendChild(element);
+        numWrapper.appendChild(unlimitedLabel);
+        fieldContainer.appendChild(numWrapper);
+        break;
+
+      case 'datetime_picker':
+      case 'datetime_picker_unlimited':
+        const dtWrapper = document.createElement('div');
+        dtWrapper.className = 'input-wrapper';
+        element = document.createElement('input');
+        element.type = 'text';
+        element.placeholder = '날짜와 시간을 선택하세요';
+
+        const defaultDate = new Date();
+        const timeParts = (field.defaultTime.h !== undefined && field.defaultTime.m !== undefined)
+                         ? [field.defaultTime.h, field.defaultTime.m]
+                         : [0, 0]; // 기본값 안전 처리
+        defaultDate.setHours(timeParts[0], timeParts[1], 0, 0);
+
+        const flatpickrConfig = {
+          enableTime: true,
+          dateFormat: "Y-m-d H:i",
+          time_24hr: true,
+          // defaultDate: defaultDate // 초기 기본값 설정 제거 (onOpen에서 처리)
+           onOpen: function(selectedDates, dateStr, instance) {
+             if (!instance.input.value && !(instance.input.closest('.input-wrapper').querySelector('input[type="checkbox"]') && instance.input.closest('.input-wrapper').querySelector('input[type="checkbox"]').checked)) {
+               instance.setDate(defaultDate, false);
+             }
+           }
+        };
+
+        flatpickr(element, flatpickrConfig);
+
+        dtWrapper.appendChild(element);
+
+        if (field.type === 'datetime_picker_unlimited') {
+          const dtUnlimitedLabel = document.createElement('label');
+          const dtUnlimitedCheckbox = document.createElement('input');
+          dtUnlimitedCheckbox.type = 'checkbox';
+          dtUnlimitedCheckbox.name = `${field.name}_unlimited`; // name 속성 부여
+          dtUnlimitedLabel.appendChild(dtUnlimitedCheckbox);
+          dtUnlimitedLabel.appendChild(document.createTextNode(' 무제한'));
+
+          dtUnlimitedCheckbox.addEventListener('change', () => {
+             element.disabled = dtUnlimitedCheckbox.checked;
+             element.required = !dtUnlimitedCheckbox.checked && field.required; // required 상태 제어
+             if (dtUnlimitedCheckbox.checked) {
+               element.value = "무제한"; // '무제한' 텍스트 표시
+               if (element._flatpickr) element._flatpickr.clear();
+             } else {
+               // 체크 해제 시 기본 날짜/시간으로 설정
+               if (element._flatpickr) element._flatpickr.setDate(defaultDate, true);
+             }
+          });
+          dtWrapper.appendChild(dtUnlimitedLabel);
+        }
+        fieldContainer.appendChild(dtWrapper);
+        break;
+
+      default: // 'text', 'textarea' 등
+        if(field.type === 'textarea') {
+            element = document.createElement('textarea');
+            element.rows = field.rows || 3;
+        } else {
+            element = document.createElement('input');
+            element.type = 'text'; // 기본 text 타입
+        }
+        if(field.placeholder) element.placeholder = field.placeholder;
+        fieldContainer.appendChild(element);
+    } // End switch
+
+    // Assign name to the primary input element (not the wrapper)
+    if (element && field.type !== 'number_unlimited' && field.type !== 'datetime_picker' && field.type !== 'datetime_picker_unlimited') {
+        element.name = field.name;
+    } else if (field.type === 'number_unlimited') {
+        // Find the number input again to assign name
+        const numberInput = fieldContainer.querySelector('input[type="number"]');
+        if(numberInput) numberInput.name = field.name;
+    } else if (field.type === 'datetime_picker' || field.type === 'datetime_picker_unlimited') {
+         // Find the text input again to assign name
+        const dateInput = fieldContainer.querySelector('input[type="text"]');
+        if(dateInput) dateInput.name = field.name;
+    }
+
+
+    group.appendChild(fieldContainer);
+    container.appendChild(group);
+
+    // 체크박스 변경 시 required 속성 및 필드 가시성 동적으로 제어
+    checkbox.addEventListener('change', () => {
+      fieldContainer.style.display = checkbox.checked ? 'block' : 'none';
+      const inputs = fieldContainer.querySelectorAll('input:not([type="checkbox"]), select, textarea'); // 체크박스 제외
+
+      inputs.forEach(el => {
+        el.disabled = !checkbox.checked; // 필드 활성/비활성화
+        const fieldDefinition = fields.find(f => f.name === field.name); // 원본 필드 정의 찾기
+
+        if (!checkbox.checked) {
+          // 값 초기화 및 required 제거
+          el.value = '';
+          el.required = false;
+           // flatpickr 값 초기화
+           if (el._flatpickr) el._flatpickr.clear();
+           // number_unlimited의 무제한 체크박스도 해제
+           const unlimitedCb = fieldContainer.querySelector(`input[name="${el.name}_unlimited"]`);
+           if(unlimitedCb) unlimitedCb.checked = false;
+
+        } else {
+          // 체크 시, 원본 정의에 required가 있으면 다시 설정
+          if (fieldDefinition && fieldDefinition.required) {
+             // number_unlimited 와 datetime_picker_unlimited 는 내부 체크박스로 required 관리
+             if (field.type !== 'number_unlimited' && field.type !== 'datetime_picker_unlimited') {
+                 el.required = true;
+             } else {
+                 // 내부 무제한 체크박스가 체크 안됐을 때만 required
+                 const unlimitedCb = fieldContainer.querySelector(`input[name="${el.name}_unlimited"]`);
+                 el.required = !(unlimitedCb && unlimitedCb.checked);
+             }
+          } else {
+              el.required = false; // 원본이 필수가 아니면 required 제거
+          }
+        }
+      });
+        // number_unlimited, datetime_picker_unlimited 내부 체크박스 change 이벤트 트리거 (초기 상태 반영)
+        const unlimitedCb = fieldContainer.querySelector(`input[name$="_unlimited"]`);
+        if (unlimitedCb) {
+            unlimitedCb.dispatchEvent(new Event('change'));
+        }
+    });
+  }); // End fields.forEach
+
+}
+
+
+/**
+ * 'DSP 수정 요청' 폼의 데이터를 검증하고 확인 모달을 엽니다.
+ */
+function openDspModificationModal() {
+  const form = document.getElementById('dspModificationRequestForm');
+  if (!form.checkValidity()) {
+    showMessage('모든 필수 항목(*)을 입력해주세요.', 'error');
+    form.reportValidity();
+    return;
+  }
+
+  currentFormData = {};
+  const formData = new FormData(form);
+
+  // 화면에 보이는 활성화된 필드의 값만 수집
+  for (const [key, value] of formData.entries()) {
+    if (value && value.trim() !== '') {
+      const element = form.querySelector(`[name="${key}"]`);
+      if (element && element.offsetParent !== null) { // 요소가 화면에 보일 때만
+        currentFormData[key] = value;
+      }
+    }
+  }
+
+  // '무제한' 체크박스 값 처리
+  ['총물량', '일물량', '광고 종료일시'].forEach(fieldName => {
+      const unlimitedCheckbox = form.querySelector(`[name="${fieldName}_unlimited"]`);
+      if (unlimitedCheckbox && unlimitedCheckbox.checked) {
+          currentFormData[fieldName] = '무제한';
+      }
+  });
+
+  // 모달에 표시할 내용 생성
+  let summaryHtml = '<table>';
+  const fieldOrder = [
+    '요청사항', '대상 캠페인ID', '대상 캠페인명', '대상 광고ID', '대상 광고명',
+    '광고 타입', '랜딩 URL', '광고 단가', '총물량', '일물량', 
+    '광고 시작일시', '광고 종료일시', 
+    'Event(구독형) 식별자', 'Event(구독형) 가이드 메세지', 
+    'Event(구독형) 타이틀 메세지', 'Event(구독형) 버튼 메세지', '기타 요청'
+  ];
+
+  fieldOrder.forEach(key => {
+    if (currentFormData[key]) {
+      const displayValue = String(currentFormData[key]).replace(/\n/g, '<br>');
+      summaryHtml += `<tr><th>${key}</th><td>${displayValue}</td></tr>`;
+    }
+  });
+  summaryHtml += '</table>';
+
+  // 모달 제목 및 내용 설정
+  const modalTitle = `[DSP 수정 요청] ${currentFormData['대상 광고명']?.split('\n')[0]}_수정`;
+  document.getElementById('modalTitle').textContent = modalTitle;
+  document.getElementById('modalSummary').innerHTML = summaryHtml;
+
+  // 최종 제출 버튼에 이벤트 리스너 연결
+  const finalSubmitBtn = document.getElementById('finalSubmitBtn');
+  const newBtn = finalSubmitBtn.cloneNode(true);
+  finalSubmitBtn.parentNode.replaceChild(newBtn, finalSubmitBtn);
+  newBtn.addEventListener('click', submitDspModificationRequest_client); // 아래에 정의된 함수 호출
+
+  // 모달 표시
+  document.getElementById('confirmationModal').style.display = 'flex';
+  window.addEventListener('keydown', handleEscapeForConfirmationModal);
+}
+
+/**
+ * 확인 모달의 최종 제출 버튼을 클릭했을 때 실행될 함수.
+ * 서버의 submitDspModificationRequest 함수를 호출합니다.
+ */
+function submitDspModificationRequest_client() {
+  currentFormData.ccRecipients = document.getElementById('ccRecipients').value.trim();
+  setLoading(true);
+  closeConfirmationModal();
+
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('dspModificationRequestForm').reset();
+        buildDspModificationRequestForm(); // 폼 초기화
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .submitDspModificationRequest(currentFormData);
+}
+
+
+function submitDspModificationSkip() {
+  const dspModId = document.getElementById('dspModSkipId').value.trim();
+  if (!dspModId) {
+    showMessage('스킵할 DSP 수정 ID를 입력해주세요.', 'error');
+    return;
+  }
+
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('dspModSkipId').value = '';
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .processDspModificationSkip(dspModId);
+}
+
+
+/**
+ * 'DSP 수정 불러오기' 버튼 클릭 시 실행. 서버에 데이터 요청.
+ */
+function loadDspModificationData() {
+  const modId = document.getElementById('loadDspModId').value.trim();
+  if (!modId) {
+    showMessage('불러올 DSP 수정 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      setLoading(false);
+      if (data) {
+        populateDspModificationFormWithData(data);
+      } else {
+        showMessage(`DSP 수정 ID '${modId}'에 해당하는 데이터를 찾을 수 없습니다.`, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .getDspModificationDataById(modId);
+}
+
+function populateDspModificationFormWithData(data) {
+  // 1. DSP 수정 요청 섹션으로 화면 전환
+  showSection('dspModificationRequestSection');
+
+  // 2. 폼이 완전히 그려질 시간을 확보 (setTimeout) - 지연시간 600ms
+  setTimeout(() => {
+    const form = document.getElementById('dspModificationRequestForm');
+    if (!form) {
+        console.error("[populateDspMod] Form 'dspModificationRequestForm' not found!");
+        return;
+    }
+    form.reset(); // 폼 내용 초기화
+
+    // 모든 선택 항목 체크박스 해제 및 필드 숨기기
+    form.querySelectorAll('#dspModificationFieldsContainer .checkbox-field-group').forEach(group => {
+      const checkbox = group.querySelector('input[type="checkbox"]');
+      const fieldContainer = group.querySelector('.modification-field');
+      if (checkbox) checkbox.checked = false;
+      if (fieldContainer) fieldContainer.style.display = 'none';
+    });
+
+    // 3. 서버 데이터(시트 헤더)와 폼 필드 이름을 매핑
+    const dataMap = {
+      'request_details': '요청사항',
+      'target_campaign_id': '대상 캠페인ID',
+      'target_campaign_name': '대상 캠페인명',
+      'target_ad_id': '대상 광고ID',
+      'target_ad_name': '대상 광고명',
+      'ad_type': '광고 타입',
+      'landing_url': '랜딩 URL',
+      'ad_rate': '광고 단가',
+      'total_volume': '총물량',
+      'daily_volume': '일물량',
+      'start_date': '광고 시작일시',
+      'end_date': '광고 종료일시',
+      'event_id': 'Event(구독형) 식별자',
+      'event_guide_message': 'Event(구독형) 가이드 메세지',
+      'event_title_message': 'Event(구독형) 타이틀 메세지',
+      'event_button_message': 'Event(구독형) 버튼 메세지',
+      'other_requests': '기타 요청'
+    };
+
+
+    // 4. 받아온 데이터(data)를 순회하며 폼 채우기
+    for (const key in dataMap) { // dataMap 기준으로 루프 변경
+      const formFieldName = dataMap[key];
+      // data 객체에 key가 없거나 값이 null/undefined/빈문자열이면 건너뛰기
+      if (!data.hasOwnProperty(key) || data[key] === null || data[key] === undefined || String(data[key]).trim() === '') {
+          continue;
+      }
+      const value = data[key]; // data 객체에서 해당 key의 값 가져오기
+
+      // 해당 필드의 메인 체크박스 활성화 (선택 항목 섹션 내 필드일 경우)
+      const mainCheckboxLabel = Array.from(form.querySelectorAll('.checkbox-field-group label')).find(label => label.textContent.trim() === formFieldName);
+      if (mainCheckboxLabel) {
+          const mainCheckbox = mainCheckboxLabel.querySelector('input[type="checkbox"]');
+          if (mainCheckbox && !mainCheckbox.checked) {
+              mainCheckbox.checked = true;
+              mainCheckbox.dispatchEvent(new Event('change')); // change 이벤트 발생시켜 필드 보이게 함
+          }
+      }
+
+
+      // --- 'number_unlimited' 타입 (총물량, 일물량) 특별 처리 ---
+      if (key === 'total_volume' || key === 'daily_volume') {
+          // Select elements specifically within the field's container
+          const fieldGroup = mainCheckboxLabel ? mainCheckboxLabel.closest('.checkbox-field-group').querySelector('.modification-field') : null;
+          if (!fieldGroup) {
+              continue;
+          }
+          // Query within the specific fieldGroup
+          const numInputElement = fieldGroup.querySelector(`input[name="${formFieldName}"][type="number"]`);
+          const unlimitedCheckboxElement = fieldGroup.querySelector(`input[name="${formFieldName}_unlimited"][type="checkbox"]`);
+
+          if (numInputElement && unlimitedCheckboxElement) {
+              if (value === '무제한') {
+                  unlimitedCheckboxElement.checked = true;
+                  numInputElement.value = ''; // Ensure number input is cleared
+                  numInputElement.disabled = true;
+              } else {
+                  unlimitedCheckboxElement.checked = false;
+                  numInputElement.disabled = false; // <<< Ensure it's enabled BEFORE setting value
+                  numInputElement.value = value;   // <<< Set the value
+              }
+
+              // Dispatch change event AFTER setting state, maybe slightly delayed
+              setTimeout(() => {
+                    // Checkbox 상태에 따라 disabled 최종 결정 (혹시 위 로직이 씹히는 경우 대비)
+                    numInputElement.disabled = unlimitedCheckboxElement.checked;
+                    unlimitedCheckboxElement.dispatchEvent(new Event('change', { bubbles: true }));
+               }, 0); // Use 0ms delay to push execution to the end of the current event loop
+
+          } 
+          continue; // This field processing ends here
+      } // End number_unlimited handling
+
+      // --- 'datetime_picker_unlimited' 타입 (광고 종료일시) 특별 처리 ---
+      if (key === 'end_date') {
+          const fieldGroup = mainCheckboxLabel ? mainCheckboxLabel.closest('.checkbox-field-group').querySelector('.modification-field') : null;
+           if (!fieldGroup) {
+              continue;
+          }
+          const dateInputElement = fieldGroup.querySelector(`input[name="${formFieldName}"][type="text"]`);
+          const dateUnlimitedCheckbox = fieldGroup.querySelector(`input[name="${formFieldName}_unlimited"][type="checkbox"]`);
+
+          if (dateInputElement && dateUnlimitedCheckbox && dateInputElement._flatpickr) { // Check for flatpickr instance
+              if (value === '무제한') {
+                  dateUnlimitedCheckbox.checked = true;
+                  dateInputElement.value = '무제한';
+                  dateInputElement._flatpickr.clear();
+                  dateInputElement.disabled = true;
+              } else {
+                  dateUnlimitedCheckbox.checked = false;
+                  dateInputElement.disabled = false;
+                  dateInputElement._flatpickr.setDate(value, true); // 값 설정
+              }
+              dateUnlimitedCheckbox.dispatchEvent(new Event('change', { bubbles: true })); // UI 업데이트
+          }
+          continue; // 이 필드 처리는 여기서 종료
+      }
+
+
+      // --- 일반 필드 요소 찾기 ---
+      const element = form.querySelector(`[name="${formFieldName}"]`);
+      if (!element) {
+          continue; // 요소 없으면 다음 키로
+      }
+
+      // --- 'datetime_picker' (광고 시작일시) 또는 다른 flatpickr 필드 처리 ---
+       if (element.type === 'text' && element._flatpickr) {
+           element._flatpickr.setDate(value, true);
+           continue; // flatpickr 처리는 여기서 종료
+       }
+
+
+      // --- 그 외 일반 필드 (text, select, textarea) 처리 ---
+      element.value = value;
+      // SELECT 태그 값 설정 후 change 이벤트 발생 (의존성 처리 위해)
+      if (element.tagName === 'SELECT') {
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    } // End for loop
+
+    // 최종 값 확인 로그 (조금 더 지연시켜 확인)
+    setTimeout(() => {
+        const finalTotalVolumeInput = form.querySelector('input[name="총물량"][type="number"]');
+        const finalDailyVolumeInput = form.querySelector('input[name="일물량"][type="number"]');
+    }, 100); // 100ms 지연
+
+    showMessage('DSP 수정 요청 데이터를 성공적으로 불러왔습니다.', 'success');
+
+  }, 600); // End setTimeout (지연시간 600ms)
+}
+
+
+/**
+ * 'DSP 수정 요청 반려' 버튼 클릭 시 실행될 함수.
+ * 서버의 processDspModificationRejection 함수를 호출합니다.
+ */
+function submitDspModificationRejection() {
+  const dspModId = document.getElementById('dspModRejectionId').value.trim();
+  const reason = document.getElementById('dspModRejectionReason').value.trim();
+
+  if (!dspModId) {
+    showMessage('반려할 DSP 수정 ID를 입력해주세요.', 'error');
+    return;
+  }
+
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('dspModRejectionId').value = '';
+        document.getElementById('dspModRejectionReason').value = '';
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .processDspModificationRejection(dspModId, reason);
+}
+
+</script>

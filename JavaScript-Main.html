@@ -1,0 +1,458 @@
+<script>
+  let allFormFieldsData = null;
+  let messageTimer = null;
+  let currentFormData = {};
+  let currentEditingSheet = '';
+  let isDataLoading = false; 
+
+  window.onload = function() {
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(user) {
+      document.getElementById('userInfo').innerText = '안녕하세요, ' + user.split('@')[0] + '님';
+      setLoading(false); // 폼 데이터 로딩을 제거하고 바로 로딩 종료
+    })
+    .withFailureHandler(handleError)
+    .getUserEmail();
+};
+
+  window.addEventListener('click', () => {
+    document.querySelectorAll('.options-panel').forEach(panel => {
+        panel.style.display = 'none';
+    });
+  });
+
+  function handleError(error) {
+    setLoading(false);
+    showMessage('오류 발생: ' + error.message + '. 새로고침 후 다시 시도해주세요.', 'error');
+  }
+
+
+function showSection(sectionId) {
+  // 1. 다른 메뉴 클릭 시 모든 서브메뉴를 닫습니다.
+  document.querySelectorAll('.submenu').forEach(submenu => {
+    submenu.style.display = 'none';
+  });
+
+  // 2. 기존 섹션 표시 로직을 실행합니다.
+  document.querySelectorAll('.form-section').forEach(function(sec) { sec.style.display = 'none'; });
+  document.getElementById(sectionId).style.display = 'block';
+  clearMessage();
+
+  const existingFooter = document.querySelector('.sticky-footer');
+  if (existingFooter) {
+    existingFooter.remove();
+  }
+
+const sectionsWithFooter = {
+    'adSection': { text: '등록 요청', onclick: "openConfirmationModal('adForm')" },
+    'modificationShareSection': { text: '수정 공유', onclick: "openModificationShareModal()" },
+    'couponRequestSection': { text: '쿠폰 발급 요청', onclick: "openCouponRequestModal()" },
+    'modificationRequestSection': { text: '수정 요청', onclick: "openModificationRequestModal()" },
+    'otherRequestSection': { text: '기타 요청', onclick: "openOtherRequestModal()" },
+    'copyCreationSection': { text: '복사 생성 요청', onclick: "openCopyCreationModal()" },
+    'dspModificationRequestSection': { text: 'DSP 수정 요청', onclick: "openDspModificationModal()" },
+    'cashslideModificationRequestSection': { text: '캐슬 수정 요청', onclick: "openCashslideModificationModal()" }, // 이 줄 추가
+    'cxRequestSection': { text: 'CX팀 요청 등록', onclick: "openCxRequestModal()" },
+    'bdRequestSection': { text: '오퍼월사업팀 요청 등록', onclick: "openBdRequestModal()" }
+  };
+  
+  if (sectionsWithFooter[sectionId]) {
+    const footer = document.createElement('div');
+    footer.className = 'sticky-footer';
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'submit-btn';
+    submitBtn.textContent = sectionsWithFooter[sectionId].text;
+    submitBtn.setAttribute('onclick', sectionsWithFooter[sectionId].onclick);
+    footer.appendChild(submitBtn);
+    document.body.appendChild(footer);
+  }
+  
+  if (sectionId === 'adSection') {
+      if (!allFormFieldsData) { 
+        setLoading(true);
+        google.script.run
+          .withSuccessHandler(function(data) {
+            allFormFieldsData = data;
+            setLoading(false);
+            document.getElementById('adForm').innerHTML = '';
+            document.getElementById('adType').value = '';
+          })
+          .withFailureHandler(handleError)
+          .getAllFormFields();
+      } else {
+        document.getElementById('adForm').innerHTML = '';
+        document.getElementById('adType').value = '';
+      }
+  } 
+  
+if (sectionId.startsWith('dsp')) {
+      if (!allDspFormFieldsData) {
+        setLoading(true);
+        google.script.run
+          .withSuccessHandler(function(data) {
+            allDspFormFieldsData = data;
+            setLoading(false);
+            if (sectionId === 'dspModificationRequestSection') {
+              buildDspModificationRequestForm();
+            }
+          })
+          .withFailureHandler(handleError)
+          .getDspAllFormFields();
+      } else {
+           if (sectionId === 'dspModificationRequestSection') {
+             buildDspModificationRequestForm();
+           }
+      }
+  }
+  
+if (sectionId.startsWith('cashslide')) {
+      if (!allCashslideFormFieldsData) {
+        setLoading(true);
+        google.script.run
+          .withSuccessHandler(function(data) {
+            allCashslideFormFieldsData = data;
+            setLoading(false);
+            if (sectionId === 'cashslideModificationRequestSection') {
+              buildCashslideModificationForm();
+            }
+          })
+          .withFailureHandler(handleError)
+          .getCashslideAllFormFields();
+      } else {
+        if (sectionId === 'cashslideModificationRequestSection') {
+          buildCashslideModificationForm();
+        }
+      }
+  }
+  
+  if (sectionId === 'couponRequestSection') {
+    flatpickr("#couponExpiryDate", { dateFormat: "Y-m-d" });
+  } 
+  
+  if (sectionId === 'modificationRequestSection') {
+    buildModificationRequestForm();
+  } 
+
+  if (sectionId === 'copyCreationSection') {
+    buildCopyCreationForm();
+  }
+  
+  if (sectionId === 'otherRequestSection') { 
+    document.getElementById('otherRequestSubformContainer').innerHTML = '';
+    document.getElementById('otherRequestForm').reset();
+  }
+
+  if (sectionId === 'cxRequestSection') {
+    buildCxRequestForm();
+    const form = document.getElementById('cxRequestForm');
+    if(form) form.reset();
+  }
+
+  if (sectionId === 'bdRequestSection') {
+    buildBdRequestForm(); // 폼 생성 함수 호출
+    // alert('추후 개발 예정입니다.'); // 이 줄은 삭제하거나 주석 처리
+  }
+
+}
+  function toggleSubmenu(submenuId) {
+    const submenu = document.getElementById(submenuId);
+    if (submenu) { // null 체크 추가
+        submenu.style.display = submenu.style.display === 'block' ? 'none' : 'block';
+    }
+  }
+
+
+    function setLoading(isLoading) {
+      document.getElementById('loader').style.display = isLoading ? 'flex' : 'none';
+    }
+
+ function showMessage(msg, type) {
+    if (messageTimer) clearTimeout(messageTimer);
+    const msgElement = document.getElementById('message');
+    msgElement.innerHTML = msg;
+    msgElement.className = `message ${type}`;
+
+    // ▼▼▼▼▼ [수정] 성공 메시지 표시 시 화면 최상단으로 스크롤 ▼▼▼▼▼
+    if (type === 'success') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    // ▲▲▲▲▲ [수정] ▲▲▲▲▲
+
+    messageTimer = setTimeout(function() {
+      clearMessage();
+    }, 5000);
+  }
+
+
+    function clearMessage() {
+      const msgElement = document.getElementById('message');
+      msgElement.className = 'message';
+    }
+
+    function handleEscapeForConfirmationModal(event) {
+        if (event.key === 'Escape') {
+            closeConfirmationModal();
+        }
+    }
+
+
+
+
+function toggleModificationField(checkbox, fieldId) {
+  const field = document.getElementById(fieldId);
+  const textarea = field.querySelector('textarea');
+  if (checkbox.checked) {
+    field.style.display = 'block';
+    textarea.required = true;
+  } else {
+    field.style.display = 'none';
+    textarea.required = false;
+    textarea.value = ''; // 체크 해제 시 내용 삭제
+  }
+}
+
+
+   function closeConfirmationModal() {
+       document.getElementById('confirmationModal').style.display = 'none';
+       document.getElementById('ccRecipients').value = ''; // 이 줄을 추가하여 CC 필드를 초기화합니다.
+       window.removeEventListener('keydown', handleEscapeForConfirmationModal);
+    }
+
+
+
+
+
+function openCopyCreationModal() {
+  const form = document.getElementById('copyCreationForm');
+  if (!form.checkValidity()) {
+    showMessage('필수 항목을 모두 입력해주세요.', 'error');
+    form.reportValidity();
+    return;
+  }
+
+  currentFormData = {};
+  const formData = new FormData(form);
+
+  // 화면에 보이는 필드만 수집
+  for (const [key, value] of formData.entries()) {
+    if (!value || value.trim() === '') continue;
+    
+    const element = form.querySelector(`[name="${key}"]`);
+    // 요소가 존재하고 화면에 보일 때 (또는 메인 필드일 때)
+    if (element && (element.offsetParent !== null || ['주요 요청사항', '캠페인 ID', '복사 대상 광고 ID'].includes(key))) {
+        if (currentFormData.hasOwnProperty(key)) {
+            if (!Array.isArray(currentFormData[key])) {
+                currentFormData[key] = [currentFormData[key]];
+            }
+            currentFormData[key].push(value);
+        } else {
+            currentFormData[key] = value;
+        }
+    }
+  }
+
+  // 무제한 체크박스 처리
+  const unlimitedDateFields = ['광고 집행 종료 일시', '광고 노출 중단 종료일시'];
+  unlimitedDateFields.forEach(fieldName => {
+    // "copy-check-" ID 패턴 사용에 유의 (buildCopyCreationForm에서 설정)
+    const fieldCheckbox = document.getElementById(`copy-check-${fieldName}`);
+    if (fieldCheckbox && fieldCheckbox.checked) {
+      const fieldWrapper = form.querySelector(`[name="${fieldName}"]`).closest('.input-wrapper');
+      const unlimitedCheckbox = fieldWrapper.querySelector('input[type="checkbox"]');
+      if (unlimitedCheckbox && unlimitedCheckbox.checked) {
+        currentFormData[fieldName] = '무제한';
+      }
+    }
+  });
+
+  // 요약 HTML 생성
+  let summaryHtml = '<table>';
+  // 주요 필드 먼저 표시
+  const mainKeys = ['주요 요청사항', '캠페인 ID', '복사 대상 광고 ID', '수정 필요 광고 ID', '수정 필요 광고명'];
+  mainKeys.forEach(key => {
+    if (currentFormData[key]) {
+      let val = currentFormData[key];
+      if (key === '주요 요청사항') val = val.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      summaryHtml += `<tr><th>${key}</th><td>${val.replace(/\n/g, '<br>')}</td></tr>`;
+    }
+  });
+
+  // 나머지(선택) 필드 표시
+  for (const key in currentFormData) {
+    if (!mainKeys.includes(key)) {
+      let val = String(currentFormData[key]);
+      // 특수문자 처리 필요한 필드 확인 (기존 수정 요청과 동일한 필드들)
+      const fieldsToEscape = ['문구 - 타이틀', '문구 - 서브', '문구 - 상세화면 상단 타이틀', '문구 - 서브1 상단', '문구 - 서브1 하단', '문구 - 서브2'];
+      if (fieldsToEscape.includes(key)) val = val.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      
+      summaryHtml += `<tr><th>${key}</th><td>${val.replace(/\n/g, '<br>')}</td></tr>`;
+    }
+  }
+  summaryHtml += '</table>';
+
+  // 제목 설정
+  const adName = currentFormData['수정 필요 광고명'] || '(광고명 미입력)';
+  const d = new Date();
+  const yymmdd = String(d.getFullYear()).slice(2) + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  
+  document.getElementById('modalTitle').textContent = `[광고 수정,생성_요청] ${adName}_${yymmdd}`;
+  document.getElementById('modalSummary').innerHTML = summaryHtml;
+
+  const finalSubmitBtn = document.getElementById('finalSubmitBtn');
+  const newBtn = finalSubmitBtn.cloneNode(true);
+  finalSubmitBtn.parentNode.replaceChild(newBtn, finalSubmitBtn);
+  newBtn.addEventListener('click', submitCopyCreationRequest_client);
+
+  document.getElementById('confirmationModal').style.display = 'flex';
+  window.addEventListener('keydown', handleEscapeForConfirmationModal);
+}
+
+function submitCopyCreationRequest_client() {
+  currentFormData.ccRecipients = document.getElementById('ccRecipients').value.trim();
+  setLoading(true);
+  closeConfirmationModal();
+
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('copyCreationForm').reset();
+        document.getElementById('copyCreationFieldsContainer').innerHTML = ''; // 동적 필드 초기화
+        buildCopyCreationForm(); // 폼 다시 빌드
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .submitCopyCreationRequest(currentFormData);
+}
+
+
+
+function loadCopyCreationData() {
+  const id = document.getElementById('loadCopyCreationId').value.trim();
+  if (!id) { showMessage('불러올 ID를 입력해주세요.', 'error'); return; }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      setLoading(false);
+      if (data) populateCopyCreationFormWithData(data);
+      else showMessage(`ID '${id}'를 찾을 수 없습니다.`, 'error');
+    })
+    .withFailureHandler(handleError)
+    .getCopyCreationDataById(id);
+}
+
+function populateCopyCreationFormWithData(data) {
+  showSection('copyCreationSection');
+  setTimeout(() => {
+    const form = document.getElementById('copyCreationForm');
+    form.reset();
+    document.getElementById('copyCreationFieldsContainer').innerHTML = '';
+    buildCopyCreationForm(); // 동적 필드 재생성
+
+    // 기본 필드 채우기
+    const map = {
+      'request_details': '주요 요청사항',
+      'campaign_id': '캠페인 ID',
+      'source_ad_id': '복사 대상 광고 ID',
+      'target_ad_id_to_modify': '수정 필요 광고 ID',
+      'target_ad_name_to_modify': '수정 필요 광고명'
+    };
+
+    for (const [header, name] of Object.entries(map)) {
+      if (data[header]) form.querySelector(`[name="${name}"]`).value = data[header];
+    }
+
+    // JSON 옵션 필드 채우기
+    if (data.modification_options_json) {
+      try {
+        const options = JSON.parse(data.modification_options_json);
+        for (const key in options) {
+          const mainCheckbox = document.getElementById(`copy-check-${key}`);
+          if (mainCheckbox) {
+            mainCheckbox.checked = true;
+            mainCheckbox.dispatchEvent(new Event('change'));
+            
+            // 하위 필드 값 채우기
+            const value = options[key];
+            const fieldContainer = document.getElementById(`copy-field-${key}`);
+            if (fieldContainer) {
+                // 배열 형태(체크박스 등)인지 확인
+                if (Array.isArray(value)) {
+                    // (단순화) 현재 폼 빌더 구조상 텍스트/셀렉트 위주이므로 문자열로 변환하여 처리 시도
+                    // 만약 복잡한 하위 구조라면 별도 로직 필요
+                } else {
+                    const inputs = fieldContainer.querySelectorAll(`[name="${key}"]`);
+                    inputs.forEach(input => input.value = value);
+                    
+                    // 서브 필드 (예: URL 세트) 처리
+                    if (key === 'URL - 네이버페이 CPC 전용') {
+                       // JSON 파싱된 객체 내에 서브필드 키가 바로 있을 수 있음 (데이터 저장 구조에 따라 다름)
+                       // 여기서는 저장시 flat하게 저장되지 않았을 수 있으므로 확인 필요
+                       // submitCopyCreationRequest에서 formData 전체를 JSON으로 저장하지 않고
+                       // modificationOptions에 필요한 키만 담았으므로, 
+                       // 저장된 JSON 구조: { "URL - 네이버페이 CPC 전용": "on", "기본 URL": "...", "상세전용랜딩 URL": "..." } 형태일 가능성 높음
+                       // 따라서 options 객체를 순회하며 채우는 것이 안전함
+                    }
+                }
+            }
+          }
+        }
+        
+        // JSON 객체의 모든 키에 대해 폼 필드 검색 및 값 주입 (서브 필드 포함)
+        for (const [key, value] of Object.entries(options)) {
+            const inputs = form.querySelectorAll(`[name="${key}"]`);
+            if (inputs.length > 0) {
+                inputs.forEach(input => input.value = value);
+            }
+        }
+
+      } catch (e) { console.error('옵션 파싱 실패', e); }
+    }
+    showMessage('데이터를 성공적으로 불러왔습니다.', 'success');
+  }, 300);
+}
+
+function submitCopyCreationSkip() {
+  const id = document.getElementById('copySkipId').value.trim();
+  if (!id) { showMessage('스킵할 ID를 입력해주세요.', 'error'); return; }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setLoading(false);
+      showMessage(res.message, res.success ? 'success' : 'error');
+      if (res.success) document.getElementById('copySkipId').value = '';
+    })
+    .withFailureHandler(handleError)
+    .processCopyCreationSkip(id);
+}
+
+function submitCopyCreationRejection() {
+  const id = document.getElementById('copyRejectionId').value.trim();
+  const reason = document.getElementById('copyRejectionReason').value.trim();
+  if (!id) { showMessage('반려할 ID를 입력해주세요.', 'error'); return; }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setLoading(false);
+      showMessage(res.message, res.success ? 'success' : 'error');
+      if (res.success) {
+        document.getElementById('copyRejectionId').value = '';
+        document.getElementById('copyRejectionReason').value = '';
+      }
+    })
+    .withFailureHandler(handleError)
+    .processCopyCreationRejection(id, reason);
+}
+
+
+
+
+
+
+
+</script>

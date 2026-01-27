@@ -1,0 +1,1106 @@
+<script>
+
+  function setupCpqListeners(form) {
+    const landingTypeSelect = form.querySelector('[name="랜딩 형태"]');
+    const useDeeplinkSelect = form.querySelector('[name="사전 랜딩(딥링크) 사용"]');
+    const deeplinkRequiredInput = form.querySelector('[name="사전 랜딩 실행 필수"]');
+    const deeplinkButtonTextInput = form.querySelector('[name="사전 랜딩 버튼 텍스트"]');
+    const deeplinkAlertInput = form.querySelector('[name="사전 랜딩 미실행 alert 메시지"]');
+    const useSecondActionPopup = form.querySelector('[name="2차 액션 팝업 사용 여부"]');
+
+    // '랜딩 형태' 변경 시
+    const handleLandingTypeChange = () => {
+        if (!landingTypeSelect || !useDeeplinkSelect) return;
+        const selectedValue = landingTypeSelect.value;
+        if (selectedValue === '아웃랜딩(이미지형 CPQ)' || selectedValue === '아웃랜딩(CPVQ)') {
+            useDeeplinkSelect.value = 'TRUE';
+        } else {
+            useDeeplinkSelect.value = 'FALSE';
+        }
+        // 변경된 값을 다른 종속성에 전파하기 위해 change 이벤트 발생
+        useDeeplinkSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    // '사전 랜딩(딥링크) 사용' 변경 시
+    const handleDeeplinkUseChange = () => {
+        if (!useDeeplinkSelect || !deeplinkRequiredInput || !deeplinkButtonTextInput || !deeplinkAlertInput) return;
+        const selectedValue = useDeeplinkSelect.value;
+        deeplinkRequiredInput.value = selectedValue; // '사전 랜딩 실행 필수' 값 동기화
+        if (selectedValue === 'TRUE') {
+            deeplinkButtonTextInput.value = '힌트 보러가기';
+            deeplinkAlertInput.value = '랜딩페이지에서 힌트 확인 후 참여해주세요!';
+        } else {
+            deeplinkButtonTextInput.value = '';
+            deeplinkAlertInput.value = '';
+        }
+    };
+    
+    // '2차 액션 팝업 사용 여부' 변경 시
+    const handleSecondActionPopupChange = () => {
+        if (!useSecondActionPopup) return;
+        const isUsed = useSecondActionPopup.value === '사용';
+        const relatedFields = [
+            '2차 액션 팝업 타이틀',
+            '2차 액션 팝업 액션 버튼명',
+            '2차 액션 팝업 랜딩 URL',
+            '2차 액션 팝업 이미지 경로'
+        ];
+        relatedFields.forEach(fieldName => {
+            const input = form.querySelector(`[name="${fieldName}"]`);
+            if (input) {
+                input.required = isUsed;
+                const label = input.closest('.form-group')?.querySelector('label');
+                if (label) {
+                    label.classList.toggle('required', isUsed);
+                }
+            }
+        });
+    };
+
+    if (landingTypeSelect) landingTypeSelect.addEventListener('change', handleLandingTypeChange);
+    if (useDeeplinkSelect) useDeeplinkSelect.addEventListener('change', handleDeeplinkUseChange);
+    if (useSecondActionPopup) useSecondActionPopup.addEventListener('change', handleSecondActionPopupChange);
+
+    // 초기 로드 시 한 번 실행
+    handleLandingTypeChange();
+    handleSecondActionPopupChange();
+  }
+
+function setupAdvertiserCategoryListeners(form) {
+    // 광고주 필드는 'searchable-dropdown' 구조이므로 name="광고주"인 hidden input을 찾음
+    const advertiserInput = form.querySelector('input[name="광고주"]');
+    const categorySelect = form.querySelector('select[name="카테고리"]');
+
+    if (advertiserInput && categorySelect && allFormFieldsData && allFormFieldsData.dropdowns.advertiserCategoryMap) {
+      
+      advertiserInput.addEventListener('change', function() {
+        const selectedAdvertiser = this.value;
+        const categoryMap = allFormFieldsData.dropdowns.advertiserCategoryMap;
+        
+        // 매핑된 카테고리가 있는지 확인
+        if (categoryMap.hasOwnProperty(selectedAdvertiser)) {
+          const matchedCategory = categoryMap[selectedAdvertiser];
+          
+          if (matchedCategory) {
+            // 카테고리 select 박스에 해당 값이 옵션으로 존재하는지 확인
+            const options = Array.from(categorySelect.options).map(opt => opt.value);
+            
+            if (options.includes(matchedCategory)) {
+              categorySelect.value = matchedCategory;
+              // 시각적 업데이트 등을 위해 change 이벤트 발생
+              categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }
+        }
+      });
+    }
+  }
+
+function setupUrlDependencies(form) {
+    const osDropdown = form.querySelector('[name="OS_DROPDOWN"]');
+    const osCheckboxEl = form.querySelector('[name="OS_CHECKBOX"]'); 
+    
+    const urlAosInput = form.querySelector('[name="URL_AOS"]');
+    const urlIosInput = form.querySelector('[name="URL_IOS"]');
+    const urlPcInput = form.querySelector('[name="URL_PC"]');
+    
+    const urlAosGroup = urlAosInput ? urlAosInput.closest('.form-group') : null;
+    const urlIosGroup = urlIosInput ? urlIosInput.closest('.form-group') : null;
+    const urlPcGroup = urlPcInput ? urlPcInput.closest('.form-group') : null;
+
+    const toggleField = function(group, input, shouldShow) {
+        if (group) {
+            group.style.display = shouldShow ? 'block' : 'none';
+        }
+    };
+
+    if (osDropdown) {
+        const updateForDropdown = function() {
+            const selectedOs = osDropdown.value;
+            toggleField(urlAosGroup, urlAosInput, selectedOs === '전체' || selectedOs === 'AOS');
+            toggleField(urlIosGroup, urlIosInput, selectedOs === '전체' || selectedOs === 'IOS');
+            toggleField(urlPcGroup, urlPcInput, false);
+        };
+        osDropdown.addEventListener('change', updateForDropdown);
+        updateForDropdown(); 
+    }
+
+    if (osCheckboxEl) {
+        const osCheckboxGroup = osCheckboxEl.closest('.form-group');
+        const checkboxes = osCheckboxGroup.querySelectorAll('input[type="checkbox"]');
+        
+        const updateForCheckboxes = function() {
+            const selectedValues = Array.from(checkboxes)
+                                        .filter(cb => cb.checked)
+                                        .map(cb => cb.value);
+            
+            if (selectedValues.includes('on')) { // '전체' 체크박스
+              toggleField(urlAosGroup, urlAosInput, true);
+              toggleField(urlIosGroup, urlIosInput, true);
+              toggleField(urlPcGroup, urlPcInput, true);
+              return;
+            }
+
+            const showAos = selectedValues.includes('AOS') || selectedValues.includes('AOS+IOS');
+            const showIos = selectedValues.includes('IOS') || selectedValues.includes('AOS+IOS');
+            const showPc = selectedValues.includes('PC');
+
+            toggleField(urlAosGroup, urlAosInput, showAos);
+            toggleField(urlIosGroup, urlIosInput, showIos);
+            toggleField(urlPcGroup, urlPcInput, showPc);
+        };
+
+        checkboxes.forEach(cb => cb.addEventListener('change', updateForCheckboxes));
+        updateForCheckboxes();
+    }
+  }
+
+      function setupCookieOvenCpsListeners(form) {
+        const actionInput = form.querySelector('[name="액션명"]');
+        const actionDesc = form.querySelector('#actionNameDesc');
+        const minPaymentInput = form.querySelector('[name="최소 결제 금액"]');
+        const subCopy2Textarea = form.querySelector('[name="문구 - 서브2"]');
+        const priceInput = form.querySelector('[name="단가"]');
+        const rewardInput = form.querySelector('[name="리워드"]');
+
+        const updateActionFields = function() {
+            const amount = actionInput.value;
+            if (actionDesc) {
+                actionDesc.textContent = amount ? `'${amount}'만원 이상 구매` : '';
+            }
+            if (minPaymentInput) {
+                minPaymentInput.value = amount ? amount * 10000 : '';
+            }
+            if (subCopy2Textarea) {
+                 const defaultText = `*배송료를 제외한 실 결제 금액이 ${amount || '액션명'}만원 이상인 경우 쿠키가 지급 됩니다.\n*예약구매, 무통장입금, 후불결제 시에는 쿠키 지급이 되지 않습니다.\n*네이버웹툰/시리즈에 로그인한 네이버ID로 구매시에만 쿠키가 지급 됩니다.\n*참여하기 버튼 클릭 후 24시간 이내 구매가 완료 되어야 하며, 가장 마지막으로 클릭한 이벤트 기준으로 쿠키가 지급 됩니다.\n*구매 취소 시 지급된 쿠키는 회수 됩니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 ‘상세 안내’를 꼭 참고 부탁드립니다.\n*쿠키 사용 후 구매 취소 시 이벤트 참여가 제한될 수 있습니다.`;
+             
+                subCopy2Textarea.value = defaultText;
+            }
+        };
+
+        const calculateReward = function() {
+        if (!priceInput || !rewardInput) return; // 필수 필드가 없으면 종료
+        const price = parseFloat(priceInput.value) || 0;
+        if (price > 0) {
+            const calculatedReward = Math.floor((price * 0.7) / 100) * 100;
+            rewardInput.value = calculatedReward;
+        } else {
+            rewardInput.value = ''; // 단가가 0 이하이면 리워드 필드를 비웁니다.
+        }
+    };
+
+        if (actionInput) actionInput.addEventListener('input', updateActionFields);
+        if (priceInput) priceInput.addEventListener('input', calculateReward);
+        updateActionFields();
+        calculateReward();
+    }
+
+
+function setupNaverPayNotificationListeners(form) {
+      const brandInput = form.querySelector('[name="브랜드"]');
+      const actionSelect = form.querySelector('[name="액션명"]');
+      const taggingSelect = form.querySelector('[name="태깅"]');
+      const urlInput = form.querySelector('[name="URL"]');
+      const titleInput = form.querySelector('[name="문구 - 타이틀"]');
+      const subInput = form.querySelector('[name="문구 - 서브"]');
+      const sub1TopInput = form.querySelector('[name="문구 - 서브1 상단"]');
+      const metaTypeInput = form.querySelector('[name="(메타) NF 광고주 연동 타입"]');
+
+      // ▼▼▼▼▼ 수정된 부분 ▼▼▼▼▼
+      if (urlInput) {
+        urlInput.placeholder = "클릭키 파라미터 입력 금지"; // 힌트 문구 추가
+        urlInput.addEventListener('input', function() {
+          if (urlInput.value.includes('?')) {
+            alert("'?'는 입력할 수 없습니다. 파라미터 없는 순수 URL만 입력해주세요.");
+            urlInput.value = '';
+          }
+        });
+      }
+      // ▲▲▲▲▲ 수정된 부분 ▲▲▲▲▲
+
+      const updateSub1Top = function() {
+        if (titleInput && subInput && sub1TopInput) {
+          sub1TopInput.value = `${titleInput.value || ''} ${subInput.value || ''}`.trim();
+        }
+      };
+
+      const updateTitle = function() {
+        if (brandInput && actionSelect && titleInput) {
+          titleInput.value = `${brandInput.value || ''} ${actionSelect.value || ''}`.trim();
+          updateSub1Top();
+        }
+      };
+      
+      if (brandInput) brandInput.addEventListener('input', updateTitle);
+      if (actionSelect) actionSelect.addEventListener('change', updateTitle);
+      if (titleInput) titleInput.addEventListener('input', updateSub1Top);
+      if (subInput) subInput.addEventListener('input', updateSub1Top);
+
+      const updateMetaType = function() {
+        if (taggingSelect && metaTypeInput) {
+          if (taggingSelect.value === '스토어알림') {
+            metaTypeInput.value = '스토어 알림받기 / 게임 스토어 알림 (store_alarm)';
+          } else if (taggingSelect.value === '라방알림') {
+            metaTypeInput.value = '쇼핑라이브 알림받기 (live_alarm)';
+          } else {
+            metaTypeInput.value = '';
+          }
+        }
+      };
+      if (taggingSelect) taggingSelect.addEventListener('change', updateMetaType);
+
+      updateTitle();
+      updateSub1Top();
+      updateMetaType();
+    }
+
+ function setupAdNetworkListeners(form) {
+        // ▼▼▼▼▼ 수정된 부분 (함수 전체 교체) ▼▼▼▼▼
+        // --- Element Selectors ---
+        const adNetworkTypeSelect = form.querySelector('[name="애드네트워크 연동형 - 광고 타입"]');
+        const taggingSelect = form.querySelector('[name="태깅"]');
+        const appPackageInput = form.querySelector('[name="앱 패키지명"]');
+        const adNetworkSelect = form.querySelector('[name="광고 네트워크 연동 매체"]');
+
+        const medium1Select = form.querySelector('[name="집행매체1"]');
+        const osDropdown = form.querySelector('[name="OS_DROPDOWN"]');
+        const osCheckboxGroup = form.querySelector('[name="OS_CHECKBOX"]')?.closest('.form-group');
+
+        const mainMediaKeyLabel = form.querySelector('#media_key_main_label');
+        const mediaKeySubGroups = {
+            기본: form.querySelector('#media_key_group_기본'),
+            AOS: form.querySelector('#media_key_group_AOS'),
+            IOS: form.querySelector('#media_key_group_IOS'),
+            PC: form.querySelector('#media_key_group_PC')
+        };
+
+        // --- Data ---
+        const mediaKeyApiLabels = {
+            'TNK': 'APP ID', 'AD POPCORN': 'CAMPAIGN KEY', 'PINCRUX': 'APP KEY',
+            'SUCOMM': 'FLEX CODE', 'OHC': 'EID', 'IVE': 'ai',
+            'BUZZVIL': '버즈빌 광고 아이디', 'ADISON DSP': 'Campaign key',
+            '나스미디어NAP': 'campid', 'CAULY': 'ad_key',
+            'GreenP': '캠페인 코드'
+        };
+
+        // --- Logic ---
+        const updateFormState = () => {
+            // Part 1: Handle CPI-specific fields
+            if (adNetworkTypeSelect) {
+                const isCPI = adNetworkTypeSelect.value === 'CPI';
+                if (taggingSelect) {
+                    if (isCPI) {
+                        taggingSelect.value = '설치형';
+                        Array.from(taggingSelect.options).forEach(opt => opt.disabled = (opt.value !== '설치형'));
+                    } else {
+                        Array.from(taggingSelect.options).forEach(opt => opt.disabled = false);
+                    }
+                }
+                if (appPackageInput) {
+                    const label = appPackageInput.closest('.form-group')?.querySelector('label');
+                    appPackageInput.required = isCPI;
+                    label?.classList.toggle('required', isCPI);
+                }
+            }
+
+            // Part 2: Update Media Key Main Label
+            if (mainMediaKeyLabel && adNetworkSelect) {
+                mainMediaKeyLabel.textContent = mediaKeyApiLabels[adNetworkSelect.value] || '매체키';
+            }
+
+            // Part 3: Update Media Key Sub-field Visibility
+            const medium = medium1Select.value;
+            let show = { 기본: false, AOS: false, IOS: false, PC: false };
+
+            if (medium === '쿠키오븐' || medium === '애디슨 네트워크') {
+                const os = osDropdown.value;
+                if (os === '전체') {
+                    show.기본 = show.AOS = show.IOS = true;
+                } else if (os === 'AOS') {
+                    show.기본 = show.AOS = true;
+                } else if (os === 'IOS') {
+                    show.기본 = show.IOS = true;
+                }
+            } else if (medium === '네이버페이') {
+                if (osCheckboxGroup) {
+                    const allCheckbox = osCheckboxGroup.querySelector('input[type="checkbox"]:not([value])');
+                    if (allCheckbox?.checked) {
+                        show.기본 = show.AOS = show.IOS = show.PC = true;
+                    } else {
+                        const checked = Array.from(osCheckboxGroup.querySelectorAll('input:checked')).map(cb => cb.value);
+                        const hasAos = checked.includes('AOS') || checked.includes('AOS+IOS');
+                        const hasIos = checked.includes('IOS') || checked.includes('AOS+IOS');
+                        const hasPc = checked.includes('PC');
+
+                        if (hasAos) show.AOS = true;
+                        if (hasIos) show.IOS = true;
+                        if (hasPc) show.PC = true;
+                        if (hasAos || hasIos || hasPc) show.기본 = true;
+                    }
+                }
+            }
+
+            for (const key in mediaKeySubGroups) {
+                const group = mediaKeySubGroups[key];
+                if (group) {
+                    group.style.display = show[key] ? 'flex' : 'none';
+                    if (!show[key]) {
+                        const input = group.querySelector('input');
+                        if (input) input.value = ''; // Hide될 때 값 초기화
+                    }
+                }
+            }
+        };
+
+        // --- Event Listeners ---
+        [adNetworkTypeSelect, adNetworkSelect, medium1Select, osDropdown].forEach(el => {
+            el?.addEventListener('change', updateFormState);
+        });
+        osCheckboxGroup?.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', updateFormState);
+        });
+
+        // Initial call to set form state
+        updateFormState();
+        // ▲▲▲▲▲ 수정된 부분 ▲▲▲▲▲
+    }
+
+    function setupMediumListeners(form) {
+        const medium1Select = form.querySelector('[name="집행매체1"]');
+        const medium2CookieOvenEl = form.querySelector('[name="집행매체2_쿠키오븐"]');
+        const medium2AddisonEl = form.querySelector('[name="집행매체2_애디슨"]');
+        const medium2AddisonSpecificEl = form.querySelector('[name="집행매체2_애디슨_특정"]');
+
+        const medium2CookieOvenGroup = medium2CookieOvenEl ? medium2CookieOvenEl.closest('.form-group') : null;
+        const medium2AddisonGroup = medium2AddisonEl ? medium2AddisonEl.closest('.form-group') : null;
+        const medium2AddisonSpecificGroup = medium2AddisonSpecificEl ? medium2AddisonSpecificEl.closest('.form-group') : null;
+        const medium2AddisonSelect = form.querySelector('[name="집행매체2_애디슨"]');
+
+        const handleMedium1Change = function() {
+          if(!medium1Select) return;
+          const selectedMedium = medium1Select.value;
+          
+          if (selectedMedium === '쿠키오븐') {
+            if(medium2CookieOvenGroup) medium2CookieOvenGroup.style.display = 'block';
+            if(medium2AddisonGroup) medium2AddisonGroup.style.display = 'none';
+            if(medium2AddisonSpecificGroup) medium2AddisonSpecificGroup.style.display = 'none';
+          } else if (selectedMedium === '애디슨 네트워크') {
+            if(medium2CookieOvenGroup) medium2CookieOvenGroup.style.display = 'none';
+            if(medium2AddisonGroup) medium2AddisonGroup.style.display = 'block';
+            handleMedium2AddisonChange(); 
+          } else { 
+            if(medium2CookieOvenGroup) medium2CookieOvenGroup.style.display = 'none';
+            if(medium2AddisonGroup) medium2AddisonGroup.style.display = 'none';
+            if(medium2AddisonSpecificGroup) medium2AddisonSpecificGroup.style.display = 'none';
+          }
+        };
+
+        const handleMedium2AddisonChange = function() {
+          if(medium2AddisonGroup && medium2AddisonGroup.style.display === 'block') {
+            if(medium2AddisonSpecificGroup) {
+              medium2AddisonSpecificGroup.style.display = medium2AddisonSelect.value === '특정 매체만 진행' ? 'block' : 'none';
+            }
+          } else {
+            if(medium2AddisonSpecificGroup) {
+                medium2AddisonSpecificGroup.style.display = 'none';
+            }
+          }
+        };
+        
+        if(medium1Select) medium1Select.addEventListener('change', handleMedium1Change);
+        if(medium2AddisonSelect) medium2AddisonSelect.addEventListener('change', handleMedium2AddisonChange);
+
+        handleMedium1Change();
+    }
+
+
+function setupOsListeners(form) {
+    const medium1Select = form.querySelector('[name="집행매체1"]');
+    const osDropdownEl = form.querySelector('[name="OS_DROPDOWN"]');
+    const osCheckboxEl = form.querySelector('[name="OS_CHECKBOX"]');
+
+    const osDropdownGroup = osDropdownEl ? osDropdownEl.closest('.form-group') : null;
+    const osCheckboxGroup = osCheckboxEl ? osCheckboxEl.closest('.form-group') : null;
+
+    const handleOsDependency = function() {
+        if (!medium1Select) return;
+        const selectedMedium = medium1Select.value;
+        
+        if (selectedMedium === '쿠키오븐' || selectedMedium === '애디슨 네트워크') {
+            if(osDropdownGroup) osDropdownGroup.style.display = 'block';
+            if(osCheckboxGroup) osCheckboxGroup.style.display = 'none';
+        } else if (selectedMedium === '네이버페이') {
+            if(osDropdownGroup) osDropdownGroup.style.display = 'none';
+            if(osCheckboxGroup) osCheckboxGroup.style.display = 'block';
+        } else {
+            if(osDropdownGroup) osDropdownGroup.style.display = 'none';
+            if(osCheckboxGroup) osCheckboxGroup.style.display = 'none';
+        }
+    };
+
+    if(medium1Select) {
+        medium1Select.addEventListener('change', handleOsDependency);
+        handleOsDependency();
+    }
+}
+
+
+function setupAutoCalculations(form) {
+    // 현재 광고 타입 가져오기
+    const currentAdType = document.getElementById('adType') ? document.getElementById('adType').value : null;
+
+    // 요소 선택
+    const budgetInput = form.querySelector('[name="예산"]');
+    const priceInput = form.querySelector('[name="단가"]'); // '단가' 요소는 여전히 찾으려고 시도함
+    const totalVolumeEl = form.querySelector('[name="총물량"]'); // Hidden input
+    const totalVolumeGroup = totalVolumeEl ? totalVolumeEl.closest('.form-group') : null; // form-group div
+    const rewardInput = form.querySelector('[name="리워드"]');
+    const mediumInput = form.querySelector('[name="집행매체1"]');
+
+    const mainUrlInput = form.querySelector('[name="URL"]');
+    const detailUrlInput = form.querySelector('[name="상세 랜딩 전용 URL"]');
+
+    const subscriptionTargetInput = form.querySelector('[name="구독 대상 이름"]');
+    const subCopy2Textarea = form.querySelector('[name="문구 - 서브2"]');
+
+    const metaAmountInput = form.querySelector('[name="(메타) 클릭 리워드 지급 금액"]');
+    const metaDateInput = form.querySelector('[name="(메타) 클릭 리워드 종료 일자"]');
+
+    // number_unlimited 요소 선택 (ID 사용)
+    const totalVolumeInput = form.querySelector('#num-input-총물량'); // ID로 number input 선택
+    const totalVolumeUnlimitedCheckbox = form.querySelector('#unlimited-cb-총물량'); // ID로 checkbox 선택
+
+    // --- 계산 함수 정의 ---
+    const calculate = function() {
+        const budget = budgetInput ? parseFloat(budgetInput.value) || 0 : 0;
+        const price = priceInput ? parseFloat(priceInput.value) || 0 : 0; // 단가 필드가 없으면 price는 0이 됨
+        const medium = mediumInput ? mediumInput.value : '';
+        // const adType = document.getElementById('adType').value; // currentAdType 변수 사용
+
+        // "완전 정률..." 타입이 아닐 때만 총물량 자동 계산 실행
+        if (currentAdType !== '완전 정률 - 쿠키오븐 스마트스토어 CPS') {
+            // totalVolumeGroup 대신 totalVolumeInput 과 totalVolumeUnlimitedCheckbox 존재 여부 확인
+            if (totalVolumeInput && totalVolumeUnlimitedCheckbox) {
+                // 무제한이 체크 안됐고, 예산과 단가가 유효할 때만 계산
+                if (!totalVolumeUnlimitedCheckbox.checked && price > 0 && budget > 0) {
+                    totalVolumeInput.value = Math.floor(budget / price);
+                } else if (!totalVolumeUnlimitedCheckbox.checked) {
+                    // 무제한 아니고 계산 조건 안 맞으면 (기존 값 유지)
+                    // totalVolumeInput.value = ''; // 필요 시 빈 값 처리
+                }
+                // hidden input 값 동기화 (무제한 아닐 때)
+                if(totalVolumeEl && !totalVolumeUnlimitedCheckbox.checked) {
+                    totalVolumeEl.value = totalVolumeInput.value;
+                } else if (totalVolumeEl && totalVolumeUnlimitedCheckbox.checked) {
+                    totalVolumeEl.value = '무제한'; // 무제한일 때 hidden 값 설정
+                }
+            } else {
+            }
+        } else {
+            // "완전 정률..." 타입일 때 hidden input 값 동기화 (필수)
+            // 사용자가 직접 입력한 값이나 '무제한' 상태를 hidden input에 반영
+            if (totalVolumeEl && totalVolumeUnlimitedCheckbox && totalVolumeUnlimitedCheckbox.checked) {
+                totalVolumeEl.value = '무제한';
+            } else if (totalVolumeEl && totalVolumeInput) {
+                totalVolumeEl.value = totalVolumeInput.value;
+            }
+        }
+
+        // --- 리워드 계산 로직 ---
+        // 리워드가 없는 타입 목록
+        const noRewardTypes = ['네이버페이 알림받기', '쿠키오븐 스마트스토어 CPS', '완전 정률 - 쿠키오븐 스마트스토어 CPS']; // 새 타입 추가
+        if (!noRewardTypes.includes(currentAdType)) {
+            if (rewardInput && price > 0 && medium) {
+                let calculatedReward = '';
+                if (medium === '쿠키오븐') {
+                    calculatedReward = Math.floor((price * 0.7) / 100); // 100원 단위 버림
+                } else if (medium === '네이버페이') {
+                    const reward = price * 0.6;
+                    calculatedReward = (reward < 1000) ? Math.floor(reward) : Math.floor(reward / 100) * 100; // 1000원 미만은 1원 단위, 이상은 100원 단위 버림
+                }
+                // 애디슨 네트워크는 계산 없음 (빈 값 유지)
+
+                rewardInput.value = calculatedReward;
+            } else if (rewardInput) {
+                rewardInput.value = ''; // 조건 안 맞으면 비움
+            }
+        } 
+    }; // end calculate function
+
+    // --- 이벤트 리스너 연결 ---
+    if (budgetInput) budgetInput.addEventListener('input', calculate);
+    if (priceInput) priceInput.addEventListener('input', calculate); // 단가 필드가 없어도 오류 안 남
+    if (mediumInput) mediumInput.addEventListener('change', calculate);
+
+    // '총물량'의 무제한 체크박스 리스너 (hidden 값 동기화 및 calculate 호출)
+    if (totalVolumeUnlimitedCheckbox) {
+        totalVolumeUnlimitedCheckbox.addEventListener('change', calculate); // calculate를 호출하여 hidden 값 동기화
+    }
+
+    // '총물량' number input 직접 수정 시 hidden 값 동기화
+    if (totalVolumeInput && totalVolumeEl) {
+        totalVolumeInput.addEventListener('input', () => {
+            if (totalVolumeUnlimitedCheckbox && !totalVolumeUnlimitedCheckbox.checked) {
+                totalVolumeEl.value = totalVolumeInput.value; // 무제한 아닐 때만 hidden 값 동기화
+            }
+        });
+    } 
+
+
+    // --- URL 자동 채우기 리스너 ---
+    if (mainUrlInput && detailUrlInput) {
+        mainUrlInput.addEventListener('input', function() {
+            detailUrlInput.value = mainUrlInput.value;
+        });
+    }
+
+    // --- 구독 타입 '문구 - 서브2' 자동 생성 리스너 ---
+    if (mediumInput && subscriptionTargetInput && subCopy2Textarea) {
+        const updateSubCopy2 = () => {
+           // isDataLoading 변수는 JavaScript-Main.html 에 정의되어 있어야 함
+           if (typeof isDataLoading !== 'undefined' && isDataLoading) {
+                return;
+           }
+
+           const adType = document.getElementById('adType').value;
+           // CPA SUBSCRIBE 타입이 아닐 경우 빠르게 종료
+           if (adType !== 'CPA SUBSCRIBE' && adType !== 'CPA SUBSCRIBE 후지급') {
+               return;
+           }
+
+           const medium = mediumInput.value;
+           const target = subscriptionTargetInput.value;
+
+   // 새로운 문구 전체 맵
+   const textMap = {
+     'CPA SUBSCRIBE': {
+       '애디슨/네이버': {
+         '팔로우': '*최초 1회만 참여 가능합니다.\n*이미 팔로우 중일 경우 리워드는 지급되지 않습니다.\n*팔로우를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '좋아요': '*최초 1회만 참여 가능합니다.\n*이미 좋아요 중일 경우 리워드는 지급되지 않습니다.\n*좋아요를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '채널추가': '*최초 1회만 참여 가능합니다.\n*이미 채널 추가 중일 경우 리워드는 지급되지 않습니다.\n*채널 추가를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '유튜브 구독(채널메인)': '*최초 1회만 참여 가능합니다.\n*이미 구독 중일 경우 리워드는 지급되지 않습니다.\n*구독을 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '유튜브 구독(특정영상)': '*최초 1회만 참여 가능합니다.\n*이미 구독 중일 경우 리워드는 지급되지 않습니다.\n*구독을 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '언론사 구독': '*최초 1회만 참여 가능합니다.\n*이미 구독 중일 경우 리워드는 지급되지 않습니다.\n*구독을 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '라이브방송 참여하기': '*최초 1회만 참여 가능합니다.\n*이미 알림받기 중일 경우 리워드는 지급되지 않습니다.\n*알림받기를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '유튜브_좋아요': '*최초 1회만 참여 가능합니다.\n*이미 좋아요+구독 중일 경우 리워드는 지급되지 않습니다.\n*좋아요+구독을 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '틱톡': '*최초 1회만 참여 가능합니다.\n*이미 팔로우 중일 경우 리워드는 지급되지 않습니다.\n*팔로우를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         'X(트위터)': '*최초 1회만 참여 가능합니다.\n*이미 팔로우 중일 경우 리워드는 지급되지 않습니다.\n*팔로우를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.'
+       },
+       '쿠키오븐': {
+         '팔로우': '*최초 1회만 참여 가능합니다.\n*이미 팔로우 중일 경우 쿠키는 지급되지 않습니다.\n*팔로우를 취소할 경우 지급된 쿠키가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 \'상세 안내\'를 꼭 참고 부탁드립니다.',
+         '좋아요': '*최초 1회만 참여 가능합니다.\n*이미 좋아요 중일 경우 쿠키는 지급되지 않습니다.\n*좋아요를 취소할 경우 지급된 쿠키가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 \'상세 안내\'를 꼭 참고 부탁드립니다.',
+         '채널추가': '*최초 1회만 참여 가능합니다.\n*이미 채널 추가 중일 경우 쿠키는 지급되지 않습니다.\n*채널 추가를 취소할 경우 지급된 쿠키가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 \'상세 안내\'를 꼭 참고 부탁드립니다.',
+         '유튜브 구독(채널메인)': '*최초 1회만 참여 가능합니다.\n*이미 구독 중일 경우 쿠키는 지급되지 않습니다.\n*구독을 취소할 경우 지급된 쿠키가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 \'상세 안내\'를 꼭 참고 부탁드립니다.',
+         '유튜브 구독(특정영상)': '*최초 1회만 참여 가능합니다.\n*이미 구독 중일 경우 쿠키는 지급되지 않습니다.\n*구독을 취소할 경우 지급된 쿠키가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 \'상세 안내\'를 꼭 참고 부탁드립니다.',
+         '언론사 구독': '*최초 1회만 참여 가능합니다.\n*이미 구독 중일 경우 쿠키는 지급되지 않습니다.\n*구독을 취소할 경우 지급된 쿠키가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 \'상세 안내\'를 꼭 참고 부탁드립니다.',
+         '라이브방송 참여하기': '*최초 1회만 참여 가능합니다.\n*이미 알림받기 중일 경우 쿠키는 지급되지 않습니다.\n*알림받기를 취소할 경우 지급된 쿠키가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 \'상세 안내\'를 꼭 참고 부탁드립니다.',
+         '유튜브_좋아요': '*최초 1회만 참여 가능합니다.\n*이미 좋아요+구독 중일 경우 쿠키는 지급되지 않습니다.\n*좋아요+구독을 취소할 경우 지급된 쿠키가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 \'상세 안내\'를 꼭 참고 부탁드립니다.',
+         '틱톡': '*최초 1회만 참여 가능합니다.\n*이미 팔로우 중일 경우 쿠키는 지급되지 않습니다.\n*팔로우를 취소할 경우 지급된 쿠키가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 \'상세 안내\'를 꼭 참고 부탁드립니다.',
+         'X(트위터)': '*최초 1회만 참여 가능합니다.\n*이미 팔로우 중일 경우 쿠키는 지급되지 않습니다.\n*팔로우를 취소할 경우 지급된 쿠키가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.\n*지급된 쿠키는 유효기간이 존재합니다. 하단 \'상세 안내\'를 꼭 참고 부탁드립니다.'
+       }
+     },
+     'CPA SUBSCRIBE 후지급': {
+       '애디슨/네이버': {
+         '팔로우': '*최초 1회만 참여 가능합니다.\n*참여 완료 후 24시간 뒤부터 순차적으로 적립이 시작되며, 최대 10분 정도 소요될 수 있습니다.\n*이미 팔로우 중일 경우 리워드는 지급되지 않습니다.\n*팔로우를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '좋아요': '*최초 1회만 참여 가능합니다.\n*참여 완료 후 24시간 뒤부터 순차적으로 적립이 시작되며, 최대 10분 정도 소요될 수 있습니다.\n*이미 좋아요 중일 경우 리워드는 지급되지 않습니다.\n*좋아요를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '채널추가': '*최초 1회만 참여 가능합니다.\n*참여 완료 후 24시간 뒤부터 순차적으로 적립이 시작되며, 최대 10분 정도 소요될 수 있습니다.\n*이미 채널 추가 중일 경우 리워드는 지급되지 않습니다.\n*채널 추가를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '유튜브 구독(채널메인)': '*최초 1회만 참여 가능합니다.\n*참여 완료 후 24시간 뒤부터 순차적으로 적립이 시작되며, 최대 10분 정도 소요될 수 있습니다.\n*이미 구독 중일 경우 리워드는 지급되지 않습니다.\n*구독을 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '유튜브 구독(특정영상)': '*최초 1회만 참여 가능합니다.\n*참여 완료 후 24시간 뒤부터 순차적으로 적립이 시작되며, 최대 10분 정도 소요될 수 있습니다.\n*이미 구독 중일 경우 리워드는 지급되지 않습니다.\n*구독을 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '언론사 구독': '*최초 1회만 참여 가능합니다.\n*참여 완료 후 24시간 뒤부터 순차적으로 적립이 시작되며, 최대 10분 정도 소요될 수 있습니다.\n*이미 구독 중일 경우 리워드는 지급되지 않습니다.\n*구독을 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '라이브방송 참여하기': '*최초 1회만 참여 가능합니다.\n*참여 완료 후 24시간 뒤부터 순차적으로 적립이 시작되며, 최대 10분 정도 소요될 수 있습니다.\n*이미 알림받기 중일 경우 리워드는 지급되지 않습니다.\n*알림받기를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '유튜브_좋아요': '*최초 1회만 참여 가능합니다.\n*참여 완료 후 24시간 뒤부터 순차적으로 적립이 시작되며, 최대 10분 정도 소요될 수 있습니다.\n*이미 좋아요+구독 중일 경우 리워드는 지급되지 않습니다.\n*좋아요+구독을 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         '틱톡': '*최초 1회만 참여 가능합니다.\n*참여 완료 후 24시간 뒤부터 순차적으로 적립이 시작되며, 최대 10분 정도 소요될 수 있습니다.\n*이미 팔로우 중일 경우 리워드는 지급되지 않습니다.\n*팔로우를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.',
+         'X(트위터)': '*최초 1회만 참여 가능합니다.\n*참여 완료 후 24시간 뒤부터 순차적으로 적립이 시작되며, 최대 10분 정도 소요될 수 있습니다.\n*이미 팔로우 중일 경우 리워드는 지급되지 않습니다.\n*팔로우를 취소할 경우 지급된 리워드가 회수될 수 있습니다.\n*다크모드로 스크린샷을 찍을 경우 인식이 어려울 수 있습니다.'
+       }
+     }
+   };
+
+   let mediumGroup = '';
+           if (medium === '쿠키오븐') mediumGroup = '쿠키오븐';
+           else if (medium === '애디슨 네트워크' || medium === '네이버페이') mediumGroup = '애디슨/네이버';
+
+           let textTemplate = '';
+           if(textMap[adType] && textMap[adType][mediumGroup] && textMap[adType][mediumGroup][target]) {
+             textTemplate = textMap[adType][mediumGroup][target];
+           }
+
+           subCopy2Textarea.value = textTemplate;
+        }; // end updateSubCopy2
+
+        mediumInput.addEventListener('change', updateSubCopy2);
+        subscriptionTargetInput.addEventListener('change', updateSubCopy2);
+    }
+
+    // --- 메타 클릭 리워드 관련 리스너 ---
+    if (metaAmountInput && metaDateInput) {
+        // 요소 선택 시 closest와 querySelector를 안전하게 사용
+        const amountWrapper = metaAmountInput.closest('.input-wrapper');
+        const dateWrapper = metaDateInput.closest('.input-wrapper');
+        const amountCheckbox = amountWrapper?.querySelector('input[type="checkbox"]');
+        const dateCheckbox = dateWrapper?.querySelector('input[type="checkbox"]');
+        const dateTextInput = dateWrapper?.querySelector('input[type="text"]'); // 날짜 텍스트 input
+
+        if (amountCheckbox && dateCheckbox && dateTextInput) {
+            amountCheckbox.addEventListener('change', function() {
+                const isChecked = amountCheckbox.checked;
+                dateCheckbox.checked = isChecked;
+                dateCheckbox.disabled = isChecked; // 금액 체크 시 날짜 체크박스 비활성화
+
+                if (isChecked) {
+                    dateTextInput.value = '2100-12-31'; // 기본값 설정
+                    dateTextInput.readOnly = true; // 읽기 전용으로
+                    dateTextInput.style.display = 'inline-block'; // 보이게
+                } else {
+                    dateTextInput.readOnly = false; // 편집 가능하게
+                    // 값 초기화 및 숨김 처리는 필요에 따라 주석 해제
+                    // dateTextInput.value = '';
+                    // dateTextInput.style.display = 'none';
+                }
+                // 날짜 체크박스의 상태 변경 이벤트 수동 발생 (의존성 처리 위해)
+                dateCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        } 
+    }
+    calculate(); // 즉시 호출
+
+}
+
+function validateAndCleanInput(event) {
+  const inputElement = event.target;
+  let value = inputElement.value;
+  const forbiddenWords = ['설치', '실행'];
+  const regex = new RegExp(forbiddenWords.join('|'), 'g');
+
+  // isCleaning 플래그를 사용하여 무한 알림 방지
+  if (regex.test(value) && !inputElement.isCleaning) {
+    inputElement.isCleaning = true;
+    
+    alert("'설치', '실행' 단어는 입력할 수 없습니다. 해당 단어를 자동으로 삭제합니다.");
+    
+    const cleanedValue = value.replace(regex, '');
+    
+    // 사용자 경험을 위해 커서 위치를 최대한 보존
+    const cursorPosition = inputElement.selectionStart;
+    const charsRemoved = value.length - cleanedValue.length;
+    
+    inputElement.value = cleanedValue;
+    
+    // 제거된 글자 수를 고려하여 커서 위치 조정
+    const newCursorPosition = Math.max(0, cursorPosition - charsRemoved);
+    inputElement.setSelectionRange(newCursorPosition, newCursorPosition);
+
+    // 짧은 시간 후 플래그 해제
+    setTimeout(() => {
+      inputElement.isCleaning = false;
+    }, 100);
+  }
+}
+
+
+function setupEntryFeeDateValidation(form) {
+    const startDateInput = form.querySelector('input[data-name="CPC 입점비 광고 집행 시작"]');
+    const endDateInput = form.querySelector('input[data-name="CPC 입점비 광고 집행 종료"]');
+    
+    if (!startDateInput || !endDateInput) return;
+    
+    const startDatePicker = startDateInput._flatpickr;
+    const endDatePicker = endDateInput._flatpickr;
+
+    if (!startDatePicker || !endDatePicker) return;
+
+    // ▼▼▼▼▼ [수정] 종료일의 선택 범위를 설정하는 로직을 별도 함수로 분리 ▼▼▼▼▼
+    const setEndDateConstraints = (startDate) => {
+        if (!startDate) return;
+
+        // 종료일은 시작일보다 이전 날짜를 선택할 수 없음
+        endDatePicker.set('minDate', startDate);
+        
+        // 종료일은 시작일로부터 7일 뒤까지만 선택 가능
+        const maxEndDate = new Date(startDate.getTime());
+        maxEndDate.setDate(maxEndDate.getDate() + 7);
+        endDatePicker.set('maxDate', maxEndDate);
+    };
+    // ▲▲▲▲▲ [수정] ▲▲▲▲▲
+
+    // 시작일이 변경될 때마다 종료일의 선택 가능 범위를 제한
+    startDatePicker.config.onChange.push((selectedDates) => {
+        if (selectedDates.length > 0) {
+            const startDate = selectedDates[0];
+            setEndDateConstraints(startDate); // 위에서 만든 함수 호출
+
+            // 만약 이미 선택된 종료일이 새 범위 밖에 있다면, 값을 비우고 알림
+            const currentEndDate = endDatePicker.selectedDates[0];
+            if (currentEndDate && (currentEndDate < startDate || currentEndDate > endDatePicker.config.maxDate)) {
+                endDatePicker.clear();
+                alert('광고 집행 종료일은 시작일로부터 7일 이내로 설정해야 합니다. 종료일을 다시 선택해주세요.');
+            }
+        }
+    });
+
+    // 종료일이 변경될 때도 유효성 검사
+    endDatePicker.config.onClose.push((selectedDates) => {
+        if (startDatePicker.selectedDates.length === 0 && selectedDates.length > 0) {
+            endDatePicker.clear();
+            alert('광고 집행 시작일을 먼저 선택해주세요.');
+        }
+    });
+
+    // ▼▼▼▼▼ [핵심 수정] 폼 로드 시, 시작일의 현재 값(기본값)을 기준으로 종료일 범위 즉시 설정 ▼▼▼▼▼
+    if (startDatePicker.selectedDates.length > 0) {
+        setEndDateConstraints(startDatePicker.selectedDates[0]);
+    }
+    // ▲▲▲▲▲ [핵심 수정] ▲▲▲▲▲
+}
+
+function setupMultiRewardListeners(form) {
+ // --- 1. '국내 캠페인 ID' 입력에 따른 필드 제어 ---
+ const domesticCampaignIdInput = form.querySelector('[name="국내 캠페인 ID (중복 제거 필요 시 기재)"]');
+ const requiredDependentFields = ['광고주', '브랜드', '카테고리', '거래처'];
+ const alwaysOptionalFields = ['광고주 CS 담당자 이름', '광고주 CS 담당자 이메일'];
+ const allDependentFields = requiredDependentFields.concat(alwaysOptionalFields);
+
+ if (domesticCampaignIdInput) {
+  const toggleDependentFields = () => {
+   const hasValue = domesticCampaignIdInput.value.trim() !== '';
+
+   // 모든 종속 필드의 보이기/숨기기 처리
+   allDependentFields.forEach(fieldName => {
+    const fieldElement = form.querySelector(`[name="${fieldName}"]`);
+    if (fieldElement) {
+     const group = fieldElement.closest('.form-group');
+     if (group) {
+      group.style.display = hasValue ? 'none' : 'block';
+      if (hasValue) { // ID 값이 있으면 숨겨진 필드 값 초기화
+       if (fieldName.endsWith('광고주') || fieldName.endsWith('거래처')) {
+        const container = fieldElement.closest('.searchable-dropdown');
+        if(container) {
+         container.querySelector('input[type="hidden"]').value = '';
+         container.querySelector('.selected-value').value = '';
+        }
+       } else {
+        fieldElement.value = '';
+       }
+      }
+     }
+    }
+   });
+  
+   // '필수' 종속 필드에 대해서만 required 속성 변경
+   requiredDependentFields.forEach(fieldName => {
+     const fieldElement = form.querySelector(`[name="${fieldName}"]`);
+     if (fieldElement) {
+       fieldElement.required = !hasValue;
+     }
+   });
+  };
+  domesticCampaignIdInput.addEventListener('input', toggleDependentFields);
+  toggleDependentFields();
+ }
+
+const setupSumCalculation = (baseName) => {
+    // Find the total input first, as it's always the same
+    const totalInput = form.querySelector(`[name="${baseName}_통합"]`);
+    if (!totalInput) return;
+
+    // Try to find elements for the 'number-unlimited' type first using the new IDs
+    let aosNumberInput = form.querySelector(`#num-input-${baseName}_AOS`);
+    let iosNumberInput = form.querySelector(`#num-input-${baseName}_IOS`);
+    const aosUnlimitedCheckbox = form.querySelector(`#unlimited-cb-${baseName}_AOS`);
+    const iosUnlimitedCheckbox = form.querySelector(`#unlimited-cb-${baseName}_IOS`);
+
+    // If not found, fall back to finding standard 'number' inputs by name (for 일물량, 총예산 etc.)
+    if (!aosNumberInput) {
+        aosNumberInput = form.querySelector(`[name="${baseName}_AOS"]`);
+    }
+    if (!iosNumberInput) {
+        iosNumberInput = form.querySelector(`[name="${baseName}_IOS"]`);
+    }
+
+    // Proceed only if we have valid input fields
+    if (aosNumberInput && iosNumberInput) {
+        const calculateSum = () => {
+            const isAosUnlimited = aosUnlimitedCheckbox && aosUnlimitedCheckbox.checked;
+            const isIosUnlimited = iosUnlimitedCheckbox && iosUnlimitedCheckbox.checked;
+
+            // '무제한'이 하나라도 체크되면 '무제한'으로 표시
+            if (isAosUnlimited || isIosUnlimited) {
+                totalInput.value = '무제한';
+                return;
+            }
+
+            const aosValueStr = aosNumberInput.value.trim();
+            const iosValueStr = iosNumberInput.value.trim();
+
+            // 두 입력 필드가 모두 비어있으면 통합 필드도 비움 (기본값 0 문제 해결)
+            if (aosValueStr === '' && iosValueStr === '') {
+                totalInput.value = '';
+                return;
+            }
+
+            // 숫자가 입력되면 합계 계산
+            const aosValue = parseFloat(aosValueStr) || 0;
+            const iosValue = parseFloat(iosValueStr) || 0;
+            totalInput.value = aosValue + iosValue;
+        };
+
+        // Event Listeners Attach
+        aosNumberInput.addEventListener('input', calculateSum);
+        iosNumberInput.addEventListener('input', calculateSum);
+        if (aosUnlimitedCheckbox) aosUnlimitedCheckbox.addEventListener('change', calculateSum);
+        if (iosUnlimitedCheckbox) iosUnlimitedCheckbox.addEventListener('change', calculateSum);
+
+        // Call once on load to set the initial state correctly
+        calculateSum();
+    }
+  };
+
+
+ setupSumCalculation('총물량');
+ setupSumCalculation('일물량');
+ setupSumCalculation('총예산');
+ setupSumCalculation('일예산');
+
+ // --- 3. 미션 정보 파싱 및 자동화 로직 ---
+ const missionTextarea = form.querySelector('[name="미션 정보 붙여넣기"]');
+ const instructionTextarea = form.querySelector('[name="instruction 문구"]');
+ const titleInput = form.querySelector('[name="타이틀 문구(목록)"]');
+ const previewContainer = form.querySelector('#missionPreviewTableContainer');
+
+ if (!missionTextarea || !instructionTextarea || !titleInput || !previewContainer) return;
+
+ const parseMissionText = (text) => {
+  if (!text || !text.trim()) return [];
+  const lines = text.trim().split('\n');
+  const hasHeader = lines[0].includes('이벤트코드') || lines[0].includes('e_code');
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+  return dataLines.map(line => {
+    const columns = line.split('\t');
+    return {
+     missionName: columns[0] || '', eventCode: columns[1] || '',
+     userGuide: columns[2] || '', price: columns[3] || '',
+     time: columns[4] || ''
+    };
+   }).filter(mission => mission.userGuide && mission.time);
+ };
+
+ const updateInstructionText = () => {
+  const title = titleInput.value;
+  const missions = parseMissionText(missionTextarea.value);
+  let missionListText = missions.map(mission => `* ${mission.userGuide} : 약 ${mission.time} 소요`).join('\n');
+  const autoGeneratedText = `[참여 방법]\n1. 앱을 최초로 접속하세요\n2. ${title} 앱에서 미션을 달성하세요\n\n${missionListText}`;
+  instructionTextarea.value = autoGeneratedText;
+ };
+
+  const updatePreviewTable = () => {
+    const missions = parseMissionText(missionTextarea.value);
+
+    if (missions.length === 0) {
+      // 미션 데이터가 없으면 내용을 간단히 비우기만 합니다.
+      previewContainer.innerHTML = '';
+      return;
+    }
+
+    // 미션 데이터가 있을 경우에만 '숨김 -> 내용 삽입 -> 표시' 로직을 실행하여
+    // 렌더링 오류(큰 공백)를 방지합니다.
+    previewContainer.style.display = 'none';
+
+    let totalCost = 0;
+    let tableHTML = '<p><b>미리보기</b></p><table style="width:100%; border-collapse: collapse; font-size: 12px;"><thead><tr style="background-color:#f8f9fa;">' +
+                    '<th style="border: 1px solid #ddd; padding: 6px;">미션</th><th style="border: 1px solid #ddd; padding: 6px;">이벤트 코드</th><th style="border: 1px solid #ddd; padding: 6px;">안내문구</th><th style="border: 1px solid #ddd; padding: 6px;">단가</th><th style="border: 1px solid #ddd; padding: 6px;">소요시간</th></tr></thead><tbody>';
+
+    missions.forEach(mission => {
+      tableHTML += `<tr>
+                      <td style="border: 1px solid #ddd; padding: 6px;">${mission.missionName}</td>
+                      <td style="border: 1px solid #ddd; padding: 6px;">${mission.eventCode}</td>
+                      <td style="border: 1px solid #ddd; padding: 6px;">${mission.userGuide}</td>
+                      <td style="border: 1px solid #ddd; padding: 6px;">${mission.price}</td>
+                      <td style="border: 1px solid #ddd; padding: 6px;">${mission.time}</td>
+                    </tr>`;
+      totalCost += parseFloat(mission.price) || 0;
+    });
+
+    tableHTML += `</tbody><tfoot><tr style="font-weight: bold;">
+                    <td colspan="3" style="border: 1px solid #ddd; padding: 6px; text-align: right;">단가 총합:</td>
+                    <td colspan="2" style="border: 1px solid #ddd; padding: 6px;">${totalCost.toLocaleString()}</td>
+                  </tr></tfoot></table>`;
+    
+    previewContainer.innerHTML = tableHTML;
+    previewContainer.style.display = 'block';
+  };
+
+ missionTextarea.addEventListener('input', () => {
+  updatePreviewTable();
+  updateInstructionText();
+ });
+
+ titleInput.addEventListener('input', updateInstructionText);
+}
+
+
+function setupNaverCpsListeners(form) {
+    // --- Element Selectors ---
+    const taggingSelect = form.querySelector('[name="태깅"]');
+    const brandInput = form.querySelector('[name="브랜드"]');
+    const actionInput = form.querySelector('[name="액션명"]');
+    const priceInput = form.querySelector('[name="단가"]');
+    const rewardInput = form.querySelector('[name="리워드"]');
+    const titleInput = form.querySelector('[name="문구 - 타이틀"]');
+    const subInput = form.querySelector('[name="문구 - 서브"]');
+    const sub1TopInput = form.querySelector('[name="문구 - 서브1 상단"]');
+    const minPaymentInput = form.querySelector('[name="최소 결제 금액"]');
+    const rewardTextInput = form.querySelector('[name="(목록) 리워드 텍스트"]');
+    const metaIdInput = form.querySelector('[name="(메타) NF 광고주 연동 ID"]');
+    
+    let rewardManuallyEdited = false;
+
+    // --- Logic Functions ---
+
+    // 리워드 텍스트를 업데이트하고, 단가에 따라 리워드를 자동 계산합니다.
+    const updateRewardFields = (eventSource) => {
+        if (eventSource === 'price' && priceInput && rewardInput && !rewardManuallyEdited) {
+            const price = parseFloat(priceInput.value) || 0;
+            const calculatedReward = price * 0.7;
+            let finalReward = 0;
+            if (calculatedReward < 1000) {
+                finalReward = Math.floor(calculatedReward / 10) * 10;
+            } else {
+                finalReward = Math.floor(calculatedReward / 100) * 100;
+            }
+            rewardInput.value = finalReward;
+        }
+
+        const currentRewardValue = parseFloat(rewardInput.value) || 0;
+        let rewardString = '';
+
+        if (currentRewardValue <= 0) {
+            rewardString = '';
+        } else if (currentRewardValue >= 10000 && currentRewardValue % 1000 === 0) {
+            // 1. 1만원 이상이고 1천원 단위로 떨어지는 경우 (예: 15000, 16000, 30000)
+            const 만Value = currentRewardValue / 10000;
+            // 소수점 한 자리까지 표현하되, .0으로 끝나면 정수만 표시
+            rewardString = `${Number(만Value.toFixed(1))}만원`;
+        } else if (currentRewardValue < 10000 && currentRewardValue % 1000 === 0) {
+            // 2. 1만원 미만이고 1천원 단위로 떨어지는 경우 (예: 3000, 9000)
+            rewardString = `${currentRewardValue / 1000}천원`;
+        } else {
+            // 3. 그 외 모든 경우 (예: 2500, 13600)
+            rewardString = `${currentRewardValue.toLocaleString()}원`;
+        }
+
+        if (rewardTextInput) {
+            rewardTextInput.value = rewardString;
+        }
+    };
+
+    // 브랜드명과 액션명에 따라 문구와 최소 결제 금액을 업데이트합니다.
+    const updateTextAndPaymentFields = () => {
+        if (brandInput && titleInput) {
+            titleInput.value = (brandInput.value || '') + ' 스토어';
+        }
+        if (actionInput) {
+            const actionValue = actionInput.value;
+            if (subInput) subInput.value = actionValue ? `${actionValue}만원 구매시 추가적립` : '';
+            if (sub1TopInput) sub1TopInput.value = actionValue ? `${actionValue}만원 구매하면` : '';
+            if (minPaymentInput) minPaymentInput.value = actionValue ? parseFloat(actionValue) * 10000 : '';
+            const desc = form.querySelector('#actionNameDesc');
+            if (desc) desc.textContent = actionValue ? `${actionValue}만원 이상 구매` : '';
+        }
+    };
+    
+    // ▼▼▼ [수정] 태깅에 따라 (메타) ID를 업데이트하는 로직을 분리하고, 언더바(_)를 추가합니다. ▼▼▼
+    const updateMetaId = () => {
+        if (taggingSelect && metaIdInput) {
+            const tagValue = taggingSelect.value;
+            if (tagValue === '일반_브랜드펀딩') metaIdInput.value = 'store_BRCPS_';
+            else if (tagValue === '일반_플랫폼펀딩') metaIdInput.value = 'store_NVCPS_';
+            else if (tagValue === '쇼핑앱_일반_플랫폼펀딩') metaIdInput.value = 'store_shoppingapp_NVCPS_';
+            else metaIdInput.value = '';
+        }
+    };
+    // ▲▲▲ [수정] ▲▲▲
+
+    // --- Event Listeners ---
+    // ▼▼▼ [수정] 이벤트 리스너가 각각 분리된 함수를 호출하도록 변경합니다. ▼▼▼
+    if (taggingSelect) {
+        taggingSelect.addEventListener('change', updateMetaId);
+    }
+    if (brandInput) {
+        brandInput.addEventListener('input', updateTextAndPaymentFields);
+    }
+    if (actionInput) {
+        actionInput.addEventListener('input', updateTextAndPaymentFields);
+    }
+    if (priceInput) {
+        priceInput.addEventListener('input', () => updateRewardFields('price'));
+    }
+    if (rewardInput) {
+        rewardInput.addEventListener('input', () => {
+            rewardManuallyEdited = true;
+            updateRewardFields('reward');
+        });
+    }
+    // ▲▲▲ [수정] ▲▲▲
+
+    // --- Initial Calls ---
+    updateTextAndPaymentFields();
+    updateMetaId();
+    updateRewardFields('price');
+}
+
+
+function setupNaverCpsDecidedListeners(form) {
+    const brandInput = form.querySelector('[name="브랜드"]');
+    const titleInput = form.querySelector('[name="문구 - 타이틀"]');
+    const metaIdInput = form.querySelector('[name="(메타) NF 광고주 연동 ID"]');
+    
+    // 1. 브랜드 입력 시 타이틀 자동 완성
+    if (brandInput && titleInput) {
+        brandInput.addEventListener('input', () => {
+            titleInput.value = (brandInput.value || '') + ' 스토어';
+        });
+    }
+
+    // 2. (메타) NF 광고주 연동 ID 프리뷰
+    if (metaIdInput) {
+        // 기존 description 요소가 있으면 사용하고, 없으면 생성
+        let previewDiv = metaIdInput.parentNode.querySelector('.meta-id-preview');
+        if (!previewDiv) {
+            previewDiv = document.createElement('div');
+            previewDiv.className = 'description meta-id-preview';
+            previewDiv.style.color = 'blue';
+            previewDiv.style.marginTop = '5px';
+            metaIdInput.parentNode.appendChild(previewDiv);
+        }
+
+        const updateMetaIdPreview = () => {
+            const val = metaIdInput.value.trim();
+            if (val) {
+                previewDiv.textContent = `[전송값 미리보기] store_BRCPS_decided_${val}`;
+            } else {
+                previewDiv.textContent = '';
+            }
+        };
+
+        metaIdInput.addEventListener('input', updateMetaIdPreview);
+        updateMetaIdPreview(); // 초기 실행
+    }
+    
+    // 3. (선택 사항) 초기 로드 시 타이틀 업데이트
+    if (brandInput && titleInput && !titleInput.value) {
+         titleInput.value = (brandInput.value || '') + ' 스토어';
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+</script>
