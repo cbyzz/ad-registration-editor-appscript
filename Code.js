@@ -78,6 +78,9 @@ function getExternalClients() {
 }
 
 function doGet(e) {
+  Logger.log("[doGet] 웹앱 요청 시작");
+  Logger.log("[doGet] 파라미터: " + JSON.stringify(e?.parameter || {}));
+  Logger.log("VS Code에서 수정해서 보낸 메시지입니다! 🚀");
   // '이 광고 담당하기' 처리 로직 (기존과 동일)
   if (e && e.parameter && e.parameter.action === 'confirm' && e.parameter.id) {
     const adId = e.parameter.id;

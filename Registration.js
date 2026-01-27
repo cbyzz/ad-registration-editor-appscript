@@ -1,4 +1,7 @@
 function submitData(formData, subType) {
+  Logger.log("[submitData] 광고 제출 시작 - 타입: " + subType);
+  Logger.log("[submitData] 사용자 이메일: " + Session.getActiveUser().getEmail());
+  Logger.log("[submitData] 폼 데이터 키: " + Object.keys(formData).join(", "));
   // 동시 요청으로 인한 ID 중복 생성을 막기 위해 LockService 추가
   const lock = LockService.getUserLock();
   // 다른 요청이 lock을 해제할 때까지 최대 30초 대기
