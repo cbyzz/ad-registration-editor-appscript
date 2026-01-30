@@ -1,6 +1,6 @@
 // 테스트
 // const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com';
-// const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_TEST_WEBHOOK_URL');;
+// const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_TEST_WEBHOOK_URL');
 
 //. 실제 라이브
 const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com,operation@nbt.com,sales@nbt.com,adison.cs@nbt.com';
@@ -241,10 +241,11 @@ function doGet(e) {
     return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
   }
 
-  if (e && e.parameter && e.parameter.action === 'complete_copy' && e.parameter.id) {
+if (e && e.parameter && e.parameter.action === 'complete_copy' && e.parameter.id && e.parameter.adId) {
     const copyId = e.parameter.id;
+    const adId = e.parameter.adId; // 광고 ID 추출
     const completerEmail = Session.getActiveUser().getEmail();
-    const resultMessage = processCopyCreationCompletion(copyId, completerEmail);
+    const resultMessage = processCopyCreationCompletion(copyId, completerEmail, adId); // adId 전달
     return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
   }
 
@@ -1870,21 +1871,29 @@ function submitCopyCreationRequest(formData) {
 
     // 영문 헤더 정의
     const headers = [
-      'id', 'timestamp', 'registrant', 'status', 'manager', 'manager_timestamp', 'completion_timestamp',
+      'id', 'timestamp', 'registrant', 'status', 'manager', 'manager_timestamp', 
+      'rejection_timestamp', 'rejection_reason',
+      'completion_timestamp', 'ad_id', // <-- ad_id 추가
       'mail_thread_id',
-      'request_details', // 주요 요청사항
-      'campaign_id',     // 캠페인 ID
-      'target_ad_id_to_modify',   // 수정 필요 광고 ID
-      'target_ad_name_to_modify', // 수정 필요 광고명
-      'source_ad_id',    // 복사 대상 광고 ID
-      'modification_options_json' // 공통 항목 (선택) - JSON으로 저장
+      'request_details',
+      'campaign_id',
+      'target_ad_id_to_modify',
+      'target_ad_name_to_modify',
+      'source_ad_id',
+      'modification_options_json'
     ];
 
-    if (!sheet) {
+if (!sheet) {
       sheet = ss.insertSheet(sheetName, 0);
       sheet.appendRow(headers);
       sheet.getRange("1:1").setBackground("#f3f3f3").setFontWeight("bold");
       sheet.setFrozenRows(1);
+    } else { // ▼▼▼ [추가] 기존 시트에 누락된 헤더가 있다면 자동 추가하는 로직 ▼▼▼
+      const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const missingHeaders = headers.filter(h => !currentHeaders.includes(h));
+      if (missingHeaders.length > 0) {
+        sheet.getRange(1, currentHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
+      }
     }
 
     const idPrefix = `copy-${userName}-`;
@@ -1908,8 +1917,11 @@ function submitCopyCreationRequest(formData) {
     // 알림 발송
     const messageId = sendCopyCreationNotification(userEmail, uniqueId, subject, formData, modificationOptions);
 
-    const newRow = [
-      uniqueId, formattedTimestamp, userEmail, '등록 요청 완료', '', '', '',
+const newRow = [
+      uniqueId, formattedTimestamp, userEmail, '등록 요청 완료', '', '', 
+      '', '', // 반려 정보
+      '',     // completion_timestamp
+      '',     // ad_id (초기 빈값)
       messageId,
       formData['주요 요청사항'],
       formData['캠페인 ID'],
@@ -1937,13 +1949,21 @@ function sendCopyCreationNotification(senderEmail, id, subject, formData, modifi
   const confirmationUrl = `${ScriptApp.getService().getUrl()}?action=confirm_copy&id=${id}`;
   const completionUrl = `${ScriptApp.getService().getUrl()}?action=complete_copy&id=${id}`;
 
-  let body = `<p>안녕하세요, 운영팀.</p>
+let body = `<p>안녕하세요, 운영팀.</p>
               <p><b>${senderEmail}</b>님께서 복사 생성을 요청했습니다.</p>
               <p><b>ID: ${id}</b></p>
               <div style="margin-top: 15px; margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;">
                 <a href="${confirmationUrl}" style="background-color: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; margin-right: 10px;">[ 이 요청 담당하기 ]</a>
-                <a href="${completionUrl}" style="background-color: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">[ 처리 완료 ]</a>
                 <br><br>
+                <div style="display: inline-block; vertical-align: middle;">
+                   <form action="${ScriptApp.getService().getUrl()}" method="get" target="_blank" style="margin:0; padding:0;">
+                     <input type="hidden" name="action" value="complete_copy">
+                     <input type="hidden" name="id" value="${id}">
+                     <input type="text" name="adId" placeholder="생성된 광고 ID 입력" required style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-right: 5px;">
+                     <button type="submit" style="background-color: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; border: none; cursor: pointer;">[ 처리 완료 ]</button>
+                   </form>
+                 </div>
+                 <br><br>
                 <a href="${ss.getUrl()}" style="color: #0056b3; text-decoration: none; margin-right: 15px;">스프레드시트 바로가기</a>
                 <a href="${SYSTEM_URL}" style="color: #0056b3; text-decoration: none;">시스템 바로가기</a>
               </div>
@@ -1965,8 +1985,12 @@ function sendCopyCreationNotification(senderEmail, id, subject, formData, modifi
     }
   });
 
-  if (Object.keys(modificationOptions).length > 0) {
-     body += `<tr><td colspan="2" style="padding: 8px; border: 1px solid #e0e0e0; background-color: #f0f0f0; font-weight: bold; text-align: center;">공통 항목 (선택)</td></tr>`;
+  // ▼▼▼ [수정] 원본 데이터 보존을 위해 객체 복사본 생성 ▼▼▼
+  // 원본 modificationOptions를 직접 조작(delete)하면 시트 저장 시 데이터가 사라지는 문제를 방지합니다.
+  const optionsCopy = { ...modificationOptions };
+
+  if (Object.keys(optionsCopy).length > 0) {
+     body += `<tr><td colspan="2" style="padding: 8px; border: 1px solid #e0e0e0; background-color: #f0f0f0; font-weight: bold; text-align: center;">신규 생성 광고 반영 항목</td></tr>`;
      
      // 이메일에 표시할 순서대로 필드명을 정의합니다.
      const orderedKeys = [
@@ -1991,22 +2015,23 @@ function sendCopyCreationNotification(senderEmail, id, subject, formData, modifi
 
      // 1. 정해진 순서대로 출력 (데이터가 있는 경우에만)
      orderedKeys.forEach(key => {
-       if (modificationOptions.hasOwnProperty(key)) {
-         let val = modificationOptions[key];
+       if (optionsCopy.hasOwnProperty(key)) { // [수정] 복사본 사용
+         let val = optionsCopy[key]; // [수정] 복사본 사용
          if (Array.isArray(val)) val = val.join(', '); // 배열인 경우 문자열 변환
          let displayVal = String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;');
          body += `<tr><td style="padding: 8px; border: 1px solid #e0e0e0; background-color: #f9f9f9; font-weight: bold; white-space: nowrap;">${key}</td><td style="padding: 8px; border: 1px solid #e0e0e0;">${displayVal.replace(/\n/g, '<br>')}</td></tr>`;
          
-         delete modificationOptions[key]; // 출력한 키는 삭제하여 중복 방지
+         delete optionsCopy[key]; // [수정] 복사본에서 삭제하여 원본 보존
        }
      });
 
      // 2. 순서 목록에 없지만 데이터에 남아있는 항목들 출력 (예외 처리)
-     for (const [key, val] of Object.entries(modificationOptions)) {
+     for (const [key, val] of Object.entries(optionsCopy)) { // [수정] 복사본 사용
        let displayVal = String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;');
        body += `<tr><td style="padding: 8px; border: 1px solid #e0e0e0; background-color: #f9f9f9; font-weight: bold; white-space: nowrap;">${key}</td><td style="padding: 8px; border: 1px solid #e0e0e0;">${displayVal.replace(/\n/g, '<br>')}</td></tr>`;
      }
   }
+  // ▲▲▲ [수정] ▲▲▲
 
   body += `</table>`;
 
@@ -2060,17 +2085,25 @@ function recordCopyCreationConfirmation(id, approverEmail) {
   return `ID: ${id} 담당자로 지정되었습니다.`;
 }
 
-function processCopyCreationCompletion(id, completerEmail) {
+function processCopyCreationCompletion(id, completerEmail, adId) { // [수정] adId 인자 추가
   const found = findCopyCreationRowById(id);
   if (!found) return { success: false, message: `ID(${id})를 찾을 수 없습니다.` };
   const { sheet, rowIndex, headers } = found;
   const statusIndex = headers.indexOf('status');
   const timeIndex = headers.indexOf('completion_timestamp');
+  const adIdIndex = headers.indexOf('ad_id'); // [수정] ad_id 인덱스 찾기
+
+  if (statusIndex === -1) return { success: false, message: '상태 컬럼을 찾을 수 없습니다.' };
 
   sheet.getRange(rowIndex, statusIndex + 1).setValue('완료');
   sheet.getRange(rowIndex, timeIndex + 1).setValue(Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"));
-  logUserAction(completerEmail, '복사 생성 완료', { targetId: id });
-  return { success: true, message: `ID: ${id} 완료 처리되었습니다.` };
+  
+  if (adIdIndex > -1 && adId) {
+      sheet.getRange(rowIndex, adIdIndex + 1).setValue("'" + adId); // 문자열로 강제 변환하여 저장
+  }
+
+  logUserAction(completerEmail, '복사 생성 완료', { targetId: id, message: `생성된 광고 ID: ${adId}` });
+  return { success: true, message: `ID: ${id} 처리 완료되었습니다. (생성 광고 ID: ${adId})` };
 }
 
 function getCopyCreationDataById(id) {
@@ -2140,11 +2173,21 @@ function processCopyCreationRejection(id, reason) {
 
     const { sheet, rowIndex, headers, rowData } = found;
     const statusIndex = headers.indexOf('status');
+    const rejectionTimeIndex = headers.indexOf('rejection_timestamp');
+    const rejectionReasonIndex = headers.indexOf('rejection_reason');
     const registrantEmail = rowData[headers.indexOf('registrant')];
     const threadId = rowData[headers.indexOf('mail_thread_id')];
     const targetAdName = rowData[headers.indexOf('target_ad_name_to_modify')] || id;
 
     sheet.getRange(rowIndex, statusIndex + 1).setValue('반려');
+
+    const now = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+    if (rejectionTimeIndex > -1) {
+        sheet.getRange(rowIndex, rejectionTimeIndex + 1).setValue(now);
+    }
+    if (rejectionReasonIndex > -1) {
+        sheet.getRange(rowIndex, rejectionReasonIndex + 1).setValue(reason);
+    }
     
     // 반려 알림 메일 (ID 입력 없는 단순 완료 처리와 대칭되는 개념)
     if (registrantEmail) {

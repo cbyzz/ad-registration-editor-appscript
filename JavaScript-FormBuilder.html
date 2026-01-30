@@ -2274,6 +2274,7 @@ function buildCopyCreationForm() {
                     break;
                 case 'select-adType':
                     element = document.createElement('select');
+                    element.name = field.name;
                     element.innerHTML = `<option value="">광고 타입 선택</option>` + field.options.map(o => `<option value="${o}">${o}</option>`).join('');
                     // 동적 필드 생성 로직 연결
                     const adTypeSpecificContainer = document.createElement('div');

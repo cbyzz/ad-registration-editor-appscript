@@ -347,12 +347,18 @@ function loadCopyCreationData() {
 }
 
 function populateCopyCreationFormWithData(data) {
+  console.log("▶ [1] populateCopyCreationFormWithData 실행 시작", data);
+
   showSection('copyCreationSection');
+  
   setTimeout(() => {
     const form = document.getElementById('copyCreationForm');
+    if (!form) return;
+
     form.reset();
     document.getElementById('copyCreationFieldsContainer').innerHTML = '';
     buildCopyCreationForm(); // 동적 필드 재생성
+    console.log("▶ [2] 폼 리셋 및 기본 필드 재생성 완료");
 
     // 기본 필드 채우기
     const map = {
@@ -371,49 +377,113 @@ function populateCopyCreationFormWithData(data) {
     if (data.modification_options_json) {
       try {
         const options = JSON.parse(data.modification_options_json);
-        for (const key in options) {
-          const mainCheckbox = document.getElementById(`copy-check-${key}`);
-          if (mainCheckbox) {
-            mainCheckbox.checked = true;
-            mainCheckbox.dispatchEvent(new Event('change'));
-            
-            // 하위 필드 값 채우기
-            const value = options[key];
-            const fieldContainer = document.getElementById(`copy-field-${key}`);
-            if (fieldContainer) {
-                // 배열 형태(체크박스 등)인지 확인
-                if (Array.isArray(value)) {
-                    // (단순화) 현재 폼 빌더 구조상 텍스트/셀렉트 위주이므로 문자열로 변환하여 처리 시도
-                    // 만약 복잡한 하위 구조라면 별도 로직 필요
-                } else {
-                    const inputs = fieldContainer.querySelectorAll(`[name="${key}"]`);
-                    inputs.forEach(input => input.value = value);
-                    
-                    // 서브 필드 (예: URL 세트) 처리
-                    if (key === 'URL - 네이버페이 CPC 전용') {
-                       // JSON 파싱된 객체 내에 서브필드 키가 바로 있을 수 있음 (데이터 저장 구조에 따라 다름)
-                       // 여기서는 저장시 flat하게 저장되지 않았을 수 있으므로 확인 필요
-                       // submitCopyCreationRequest에서 formData 전체를 JSON으로 저장하지 않고
-                       // modificationOptions에 필요한 키만 담았으므로, 
-                       // 저장된 JSON 구조: { "URL - 네이버페이 CPC 전용": "on", "기본 URL": "...", "상세전용랜딩 URL": "..." } 형태일 가능성 높음
-                       // 따라서 options 객체를 순회하며 채우는 것이 안전함
-                    }
-                }
-            }
-          }
-        }
+        console.log("▶ [3] 파싱된 JSON 옵션:", options);
         
-        // JSON 객체의 모든 키에 대해 폼 필드 검색 및 값 주입 (서브 필드 포함)
-        for (const [key, value] of Object.entries(options)) {
-            const inputs = form.querySelectorAll(`[name="${key}"]`);
-            if (inputs.length > 0) {
-                inputs.forEach(input => input.value = value);
+        // 1. 광고 타입 추론 로직
+        let targetAdType = options['광고 타입별 추가'];
+
+        if (!targetAdType) {
+            const keys = Object.keys(options);
+            if (keys.some(k => k.startsWith('쿠키오븐 CPS_'))) targetAdType = '쿠키오븐 스마트스토어 CPS';
+            else if (keys.some(k => k.startsWith('네이버페이 알림받기_'))) targetAdType = '네이버페이 알림받기';
+            else if (keys.some(k => k.startsWith('네이버페이 CPS_'))) targetAdType = '네이버페이 스마트스토어 CPS';
+            else if (keys.some(k => k.startsWith('CPQ_'))) targetAdType = 'CPQ';
+            else if (keys.some(k => k.startsWith('CPA SUBSCRIBE_'))) targetAdType = 'CPA SUBSCRIBE';
+            
+            if (targetAdType) {
+                console.log(`▶ [Info] 추론된 광고 타입: ${targetAdType}`);
             }
         }
 
-      } catch (e) { console.error('옵션 파싱 실패', e); }
+        // 2. [1단계] 메인 체크박스 활성화 (필드 보이기)
+        if (targetAdType) {
+            const adTypeKey = '광고 타입별 추가';
+            const mainCheckbox = document.getElementById(`copy-check-${adTypeKey}`);
+            
+            if(mainCheckbox) {
+                console.log(`▶ [4] 메인 체크박스 체크: copy-check-${adTypeKey}`);
+                mainCheckbox.checked = true;
+                mainCheckbox.dispatchEvent(new Event('change')); 
+            }
+        }
+
+        // 3. [2단계] Select 박스 값 설정 (DOM 렌더링 대기 후 실행)
+        setTimeout(() => {
+            if (targetAdType) {
+                const adTypeKey = '광고 타입별 추가';
+                const adTypeSelects = form.querySelectorAll(`[name="${adTypeKey}"]`);
+                
+                if (adTypeSelects.length > 0) {
+                    adTypeSelects.forEach((select, index) => {
+                        console.log(`▶ [5-${index}] Select 요소 발견. 값 설정: ${targetAdType}`);
+                        select.value = targetAdType; 
+                        // change 이벤트를 발생시켜 하위 폼 생성 트리거 (buildAdTypeSpecificModificationFields)
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                } else {
+                    console.warn(`⚠️ [경고] Select 박스 [name="${adTypeKey}"]를 여전히 찾을 수 없음`);
+                }
+            }
+        }, 100); // 0.1초 대기 (체크박스에 의해 Select가 그려질 시간 확보)
+
+        // 4. [3단계] 나머지 데이터 채우기 (하위 폼 생성 대기 후 실행)
+        setTimeout(() => {
+            console.log("▶ [6] setTimeout 내부: 나머지 데이터 채우기 시작");
+            for (const key in options) {
+              if (key === '광고 타입별 추가') continue; 
+
+              const value = options[key];
+              
+              // A. 해당 항목의 메인 체크박스 활성화
+              const mainCheckbox = document.getElementById(`copy-check-${key}`);
+              if (mainCheckbox) {
+                if (!mainCheckbox.checked) {
+                    mainCheckbox.checked = true;
+                    mainCheckbox.dispatchEvent(new Event('change'));
+                }
+                
+                const fieldContainer = document.getElementById(`copy-field-${key}`);
+                if (fieldContainer && !Array.isArray(value)) {
+                    const inputs = fieldContainer.querySelectorAll(`[name="${key}"]`);
+                    inputs.forEach(input => input.value = value);
+                }
+              }
+
+              // B. 모든 필드 검색 및 값 주입
+              const inputs = form.querySelectorAll(`[name="${key}"]`);
+              if (inputs.length > 0) {
+                  inputs.forEach(input => {
+                      // ▼▼▼ [수정] 체크박스 타입 처리 로직 추가 ▼▼▼
+                      if (input.type === 'checkbox') {
+                          // 저장된 값이 쉼표로 구분된 문자열(예: "값1, 값2")일 수 있으므로 배열로 변환하여 비교
+                          const checkedValues = String(value).split(',').map(v => v.trim());
+                          if (checkedValues.includes(input.value)) {
+                              input.checked = true;
+                          }
+                      } 
+                      // 라디오 버튼은 별도 로직이 필요할 수 있으나 현재는 제외, 그 외(text, select 등)는 value 설정
+                      else if (input.type !== 'radio') {
+                          input.value = value;
+                      }
+                      // ▲▲▲ [수정] ▲▲▲
+                  });
+              } else {
+                  console.log(`  └ [정보] 필드명: ${key} - 매칭되는 input 없음 (정상일 수 있음)`);
+              }
+            }
+            
+            showMessage('데이터를 성공적으로 불러왔습니다.', 'success');
+            console.log("▶ [7] 로직 종료");
+
+        }, 600); // 0.1초 + 0.5초 = 총 0.6초 대기 (모든 DOM 렌더링 확보)
+
+      } catch (e) { 
+          console.error('❌ 옵션 파싱 실패', e); 
+          showMessage('데이터 파싱 중 오류가 발생했습니다.', 'error');
+      }
+    } else {
+        showMessage('데이터를 성공적으로 불러왔습니다.', 'success');
     }
-    showMessage('데이터를 성공적으로 불러왔습니다.', 'success');
   }, 300);
 }
 
