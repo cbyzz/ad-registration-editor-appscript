@@ -2,18 +2,17 @@
 // const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com';
 // const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_TEST_WEBHOOK_URL');;
 
-
-
 //. 실제 라이브
 const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com,operation@nbt.com,sales@nbt.com,adison.cs@nbt.com';
 const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
 const SYSTEM_URL = PropertiesService.getScriptProperties().getProperty('SYSTEM_URL');
 
-const SPREADSHEET_ID = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+const SPREADSHEET_ID = "1kxwYIEOxeqgkomllFDphuRpCWwa6K2mEeedetaabb2Y";
 const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
 // 변경 시트 
-const EXTERNAL_DATA_SHEET_ID = PropertiesService.getScriptProperties().getProperty('EXTERNAL_DATA_SHEET_ID');
+// https://docs.google.com/spreadsheets/d/1vTSOW-ZpyeIKnM2hy_nrwS-72YpRzC9Vdu6a7JBk-8U/edit?gid=1564465491#gid=1564465491
+const EXTERNAL_DATA_SHEET_ID = "1vTSOW-ZpyeIKnM2hy_nrwS-72YpRzC9Vdu6a7JBk-8U";
 const externalSs = SpreadsheetApp.openById(EXTERNAL_DATA_SHEET_ID);
 
 
@@ -78,9 +77,6 @@ function getExternalClients() {
 }
 
 function doGet(e) {
-  Logger.log("[doGet] 웹앱 요청 시작");
-  Logger.log("[doGet] 파라미터: " + JSON.stringify(e?.parameter || {}));
-  Logger.log("VS Code에서 수정해서 보낸 메시지입니다! 🚀");
   // '이 광고 담당하기' 처리 로직 (기존과 동일)
   if (e && e.parameter && e.parameter.action === 'confirm' && e.parameter.id) {
     const adId = e.parameter.id;
