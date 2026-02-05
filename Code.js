@@ -1,10 +1,10 @@
 // 테스트
-// const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com';
-// const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_TEST_WEBHOOK_URL');
+const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com';
+const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_TEST_WEBHOOK_URL');
 
 //. 실제 라이브
-const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com,operation@nbt.com,sales@nbt.com,adison.cs@nbt.com';
-const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
+// const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com,operation@nbt.com,sales@nbt.com,adison.cs@nbt.com';
+// const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
 const SYSTEM_URL = PropertiesService.getScriptProperties().getProperty('SYSTEM_URL');
 
 const SPREADSHEET_ID = "1kxwYIEOxeqgkomllFDphuRpCWwa6K2mEeedetaabb2Y";
