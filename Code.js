@@ -1,10 +1,10 @@
 // 테스트
-const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com';
-const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_TEST_WEBHOOK_URL');
+// const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com';
+// const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_TEST_WEBHOOK_URL');
 
 //. 실제 라이브
-// const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com,operation@nbt.com,sales@nbt.com,adison.cs@nbt.com';
-// const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
+const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com,operation@nbt.com,sales@nbt.com,adison.cs@nbt.com';
+const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
 const SYSTEM_URL = PropertiesService.getScriptProperties().getProperty('SYSTEM_URL');
 
 const SPREADSHEET_ID = "1kxwYIEOxeqgkomllFDphuRpCWwa6K2mEeedetaabb2Y";
@@ -1870,17 +1870,16 @@ function submitCopyCreationRequest(formData) {
     let sheet = ss.getSheetByName(sheetName);
 
     // 영문 헤더 정의
-    const headers = [
-      'id', 'timestamp', 'registrant', 'status', 'manager', 'manager_timestamp', 
-      'rejection_timestamp', 'rejection_reason',
-      'completion_timestamp', 'ad_id', // <-- ad_id 추가
+  const headers = [
+      'id', 'timestamp', 'registrant', 'status', 'manager', 'manager_timestamp', 'completion_timestamp',
       'mail_thread_id',
-      'request_details',
-      'campaign_id',
-      'target_ad_id_to_modify',
-      'target_ad_name_to_modify',
-      'source_ad_id',
-      'modification_options_json'
+      'request_details', // 주요 요청사항
+      'campaign_id',     // 캠페인 ID
+      'target_ad_id_to_modify',   // 수정 필요 광고 ID
+      'target_ad_name_to_modify', // 수정 필요 광고명
+      'source_ad_id',    // 복사 대상 광고 ID
+      'source_ad_name',  // [추가] 복사 대상 광고명 헤더 추가
+      'modification_options_json' // 공통 항목 (선택) - JSON으로 저장
     ];
 
 if (!sheet) {
@@ -1904,30 +1903,29 @@ if (!sheet) {
     // 공통 항목(선택값) 추출 및 JSON 변환
     const modificationOptions = {};
     for (const key in formData) {
-      if (!['주요 요청사항', '캠페인 ID', '수정 필요 광고 ID', '수정 필요 광고명', '복사 대상 광고 ID', 'ccRecipients'].includes(key)) {
+      // [수정] 제외 필드 목록에 '복사 대상 광고명' 추가
+      if (!['주요 요청사항', '캠페인 ID', '수정 필요 광고 ID', '수정 필요 광고명', '복사 대상 광고 ID', '복사 대상 광고명', 'ccRecipients'].includes(key)) {
         if (formData[key]) modificationOptions[key] = formData[key];
       }
     }
 
     // 이메일 제목 생성
-    const targetAdName = formData['수정 필요 광고명'] || '(광고명 미입력)';
+    const targetAdName = formData['복사 대상 광고명'] || '(광고명 미입력)';
     const yymmdd = Utilities.formatDate(new Date(), "Asia/Seoul", "yyMMdd");
     const subject = `[광고 수정,생성_요청] ${targetAdName}_${yymmdd} (ID: ${uniqueId})`;
 
     // 알림 발송
     const messageId = sendCopyCreationNotification(userEmail, uniqueId, subject, formData, modificationOptions);
 
-const newRow = [
-      uniqueId, formattedTimestamp, userEmail, '등록 요청 완료', '', '', 
-      '', '', // 반려 정보
-      '',     // completion_timestamp
-      '',     // ad_id (초기 빈값)
+    const newRow = [
+      uniqueId, formattedTimestamp, userEmail, '등록 요청 완료', '', '', '',
       messageId,
       formData['주요 요청사항'],
       formData['캠페인 ID'],
       formData['수정 필요 광고 ID'],
       formData['수정 필요 광고명'],
       formData['복사 대상 광고 ID'],
+      formData['복사 대상 광고명'], // [추가] 시트 저장 데이터에 추가
       JSON.stringify(modificationOptions, null, 2)
     ];
 
@@ -1972,7 +1970,7 @@ let body = `<p>안녕하세요, 운영팀.</p>
               <table align="left" cellpadding="8" style="border-collapse: collapse; border: 1px solid #e0e0e0; font-size: 12px; font-family: sans-serif;">`;
 
   const mainFields = [
-    '주요 요청사항', '캠페인 ID', '복사 대상 광고 ID', '수정 필요 광고 ID', '수정 필요 광고명'
+    '주요 요청사항', '캠페인 ID', '복사 대상 광고 ID', '복사 대상 광고명', '수정 필요 광고 ID', '수정 필요 광고명'
   ];
 
   mainFields.forEach(key => {
