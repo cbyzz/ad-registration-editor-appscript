@@ -858,19 +858,19 @@ function sendModificationRequestNotification(senderEmail, modId, subject, data) 
         const priority = priorityMap[boostingOption] || 0;
 
         if (key === '네이버페이 CPS_부스팅_placement 세팅 정보 옵션_추천 세팅 여부' && value === '세팅 O') {
-        value = `네이버마케팅_추천(nvmarketing_best) : 우선순위 ${priority}`;
+          value = `네이버마케팅_추천(nvmarketing_best) : 우선순위 1`;
         }
         if (key === '네이버페이 CPS_부스팅_placement 세팅 정보 옵션_카테고리') {
         const categoryMap = { '건강': 'nvmarketing_health', '식품': 'nvmarketing_food', '생활': 'nvmarketing_living', '뷰티': 'nvmarketing_beauty', '기타': 'nvmarketing_etc' };
         if (categoryMap[value]) {
-          value = `네이버마케팅_${value}(${categoryMap[value]}) : 우선순위 ${priority}`;
+          value = `네이버마케팅_${value}(${categoryMap[value]}) : 우선순위 1`;
         }
         }
         if (key === '네이버페이 CPS_부스팅_placement 세팅 정보 기본') {
         const basePlacementOptions = {
-          '네이버쇼핑(nvshopping)': priority,
-          '네이버마케팅(nvmarketing)': priority,
-          '네이버마케팅_네앱(nvmarketing_nvapp)': priority,
+          '네이버쇼핑(nvshopping)': 1,
+          '네이버마케팅(nvmarketing)': 1,
+          '네이버마케팅_네앱(nvmarketing_nvapp)': 1,
           '쇼핑주문배송 구매 확정 띠배너(nvshopping_order_card)': 0,
           '쇼핑주문배송 하단 추천 영역(nvshopping_order_bottom)': 0,
           '(신)결제홈 결제내역 카드(historycard)': 0
