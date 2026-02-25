@@ -841,7 +841,7 @@ function sendNotification(senderEmail, type, id, data, subType, subject) {
       displayValue = displayValue.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
     
-    if (header.includes('설정') || header.includes('메모장') || header.includes('서브2') || header.includes('placement') || header.includes('요청사항') || header.includes('instruction 문구')) {
+    if (header.includes('설정') || header.includes('메모장') || header.includes('서브2') || header.includes('placement') || header.includes('요청사항') || header.includes('instruction 문구') || header.includes('상세 안내')) {
       displayValue = displayValue.replace(/\n/g, '<br>');
     }
     

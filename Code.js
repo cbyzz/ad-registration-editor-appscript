@@ -1947,7 +1947,7 @@ function sendCopyCreationNotification(senderEmail, id, subject, formData, modifi
   const confirmationUrl = `${ScriptApp.getService().getUrl()}?action=confirm_copy&id=${id}`;
   const completionUrl = `${ScriptApp.getService().getUrl()}?action=complete_copy&id=${id}`;
 
-let body = `<p>안녕하세요, 운영팀.</p>
+  let body = `<p>안녕하세요, 운영팀.</p>
               <p><b>${senderEmail}</b>님께서 복사 생성을 요청했습니다.</p>
               <p><b>ID: ${id}</b></p>
               <div style="margin-top: 15px; margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;">
@@ -1984,25 +1984,22 @@ let body = `<p>안녕하세요, 운영팀.</p>
   });
 
   // ▼▼▼ [수정] 원본 데이터 보존을 위해 객체 복사본 생성 ▼▼▼
-  // 원본 modificationOptions를 직접 조작(delete)하면 시트 저장 시 데이터가 사라지는 문제를 방지합니다.
   const optionsCopy = { ...modificationOptions };
 
   if (Object.keys(optionsCopy).length > 0) {
      body += `<tr><td colspan="2" style="padding: 8px; border: 1px solid #e0e0e0; background-color: #f0f0f0; font-weight: bold; text-align: center;">신규 생성 광고 반영 항목</td></tr>`;
      
-     // 이메일에 표시할 순서대로 필드명을 정의합니다.
      const orderedKeys = [
        '광고주 연동 토큰 값', '매체', '단가', '총물량', '리워드', '일물량',
        '광고 집행 시작 일시', '광고 집행 종료 일시', '광고 노출 중단 시작일시', '광고 노출 중단 종료일시',
        '광고 참여 시작 후 완료 인정 유효기간 (일단위)', '트래커', '완료 이벤트 이름', '트래커 추가 정보 입력',
        'URL - 기본', 'URL - AOS', 'URL - IOS', 'URL - PC',
-       '기본 URL', '상세전용랜딩 URL', // 네이버페이 CPC 전용 하위 필드
+       '기본 URL', '상세전용랜딩 URL', 
        '소재 경로', '적용 필요 항목', '라이브 시작 시간', '라이브 종료 시간',
        'adid 타겟팅 모수파일', '데모타겟1', '데모타겟2',
        '2차 액션 팝업 사용', '2차 액션 팝업 이미지 링크', '2차 액션 팝업 타이틀', '2차 액션 팝업 액션 버튼명', '2차 액션 팝업 랜딩 URL',
        '문구 - 타이틀', '문구 - 서브', '문구 - 상세화면 상단 타이틀', '문구 - 서브1 상단', '문구 - 서브1 하단',
        '액션 버튼', '문구 - 서브2', '노출 대상', '기타', '광고 타입별 추가',
-       // 광고 타입별 추가 필드들
        '쿠키오븐 CPS_최소 결제 금액', '쿠키오븐 CPS_파트너 광고주 타입', '쿠키오븐 CPS_파트너 광고주 ID', '쿠키오븐 CPS_참여 경로 유형(app/web)',
        '네이버페이 알림받기_(메타) NF 광고주 연동 타입', '네이버페이 알림받기_(메타) NF 광고주 연동 ID', '네이버페이 알림받기_URL',
        '네이버페이 CPS_본광고_URL', '네이버페이 CPS_본광고_최소 결제 금액', '네이버페이 CPS_본광고_(목록) 리워드 조건 설명', '네이버페이 CPS_본광고_(목록) 리워드 텍스트', '네이버페이 CPS_본광고_(메타) NF 광고주 연동 ID', '네이버페이 CPS_본광고_(메타) 클릭 리워드 지급 금액',
@@ -2011,11 +2008,44 @@ let body = `<p>안녕하세요, 운영팀.</p>
        'CPA SUBSCRIBE_구독 대상 이름', 'CPA SUBSCRIBE_이미지 인식에 사용할 식별자', 'CPA SUBSCRIBE_광고주 계정 식별자1', 'CPA SUBSCRIBE_광고주 계정 식별자2', 'CPA SUBSCRIBE_광고주 계정 식별자3', 'CPA SUBSCRIBE_구독 페이지 랜딩 URL', 'CPA SUBSCRIBE_구독 페이지 랜딩 URL AOS', 'CPA SUBSCRIBE_구독 페이지 랜딩 URL IOS'
      ];
 
-     // 1. 정해진 순서대로 출력 (데이터가 있는 경우에만)
      orderedKeys.forEach(key => {
-       if (optionsCopy.hasOwnProperty(key)) { // [수정] 복사본 사용
-         let val = optionsCopy[key]; // [수정] 복사본 사용
-         if (Array.isArray(val)) val = val.join(', '); // 배열인 경우 문자열 변환
+       if (optionsCopy.hasOwnProperty(key)) {
+         let val = optionsCopy[key];
+
+         // ▼▼▼ [추가] 네이버페이 CPS Placement 설정 값 변환 로직 ▼▼▼
+         if (key === '네이버페이 CPS_부스팅_placement 세팅 정보 옵션_추천 세팅 여부') {
+             if (val === '세팅 O') {
+                 val = '네이버마케팅_추천(nvmarketing_best) : 우선순위 1';
+             } else {
+                 delete optionsCopy[key];
+                 return; // '세팅 X'면 출력하지 않고 건너뜀
+             }
+         } else if (key === '네이버페이 CPS_부스팅_placement 세팅 정보 기본') {
+             const placementMap = {
+                 '네이버쇼핑(nvshopping)': '우선순위 1',
+                 '네이버마케팅(nvmarketing)': '우선순위 1',
+                 '네이버마케팅_네앱(nvmarketing_nvapp)': '우선순위 1',
+                 '쇼핑주문배송 구매 확정 띠배너(nvshopping_order_card)': '우선순위 0',
+                 '쇼핑주문배송 하단 추천 영역(nvshopping_order_bottom)': '우선순위 0',
+                 '(신)결제홈 결제내역 카드(historycard)': '우선순위 0'
+             };
+             // 배열이거나 콤마로 구분된 문자열일 수 있으므로 배열로 통일
+             let items = Array.isArray(val) ? val : String(val).split(',').map(s => s.trim());
+             // 매핑된 우선순위 텍스트로 변환 후 줄바꿈으로 연결
+             val = items.map(item => placementMap[item] ? `${item} : ${placementMap[item]}` : item).join('\n');
+         } else if (key === '네이버페이 CPS_부스팅_placement 세팅 정보 옵션_카테고리') {
+             const categoryMap = {
+                 '건강': '네이버마케팅_건강(nvmarketing_health) : 우선순위 1',
+                 '식품': '네이버마케팅_식품(nvmarketing_food) : 우선순위 1',
+                 '생활': '네이버마케팅_생활(nvmarketing_living) : 우선순위 1',
+                 '뷰티': '네이버마케팅_뷰티(nvmarketing_beauty) : 우선순위 1',
+                 '기타': '네이버마케팅_기타(nvmarketing_etc) : 우선순위 1'
+             };
+             if (categoryMap[val]) val = categoryMap[val];
+         }
+         // ▲▲▲ [추가] ▲▲▲
+
+         if (Array.isArray(val)) val = val.join(', ');
          let displayVal = String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;');
          body += `<tr><td style="padding: 8px; border: 1px solid #e0e0e0; background-color: #f9f9f9; font-weight: bold; white-space: nowrap;">${key}</td><td style="padding: 8px; border: 1px solid #e0e0e0;">${displayVal.replace(/\n/g, '<br>')}</td></tr>`;
          
@@ -2023,13 +2053,12 @@ let body = `<p>안녕하세요, 운영팀.</p>
        }
      });
 
-     // 2. 순서 목록에 없지만 데이터에 남아있는 항목들 출력 (예외 처리)
-     for (const [key, val] of Object.entries(optionsCopy)) { // [수정] 복사본 사용
+     // 2. 순서 목록에 없지만 데이터에 남아있는 항목들 출력
+     for (const [key, val] of Object.entries(optionsCopy)) { 
        let displayVal = String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;');
        body += `<tr><td style="padding: 8px; border: 1px solid #e0e0e0; background-color: #f9f9f9; font-weight: bold; white-space: nowrap;">${key}</td><td style="padding: 8px; border: 1px solid #e0e0e0;">${displayVal.replace(/\n/g, '<br>')}</td></tr>`;
      }
   }
-  // ▲▲▲ [수정] ▲▲▲
 
   body += `</table>`;
 
