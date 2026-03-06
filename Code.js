@@ -76,6 +76,27 @@ function getExternalClients() {
   return [...new Set(allClients)].sort();
 }
 
+function getRestrictedKeywords() {
+  const sheet = ss.getSheetByName('제한업종 DB');
+  if (!sheet) return [];
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+
+  const keywords = [];
+  // 1행은 헤더이므로 인덱스 1부터 시작
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1]) { // 제한 키워드가 존재하는 경우만
+      keywords.push({
+        category: data[i][0],
+        keyword: data[i][1],
+        exception: data[i][2]
+      });
+    }
+  }
+  return keywords;
+}
+
 function doGet(e) {
   // '이 광고 담당하기' 처리 로직 (기존과 동일)
   if (e && e.parameter && e.parameter.action === 'confirm' && e.parameter.id) {
@@ -806,7 +827,19 @@ function sendModificationRequestNotification(senderEmail, modId, subject, data) 
   const completionUrl = `${ScriptApp.getService().getUrl()}?action=complete_mod&id=${modId}`;
   const ccEmails = data.ccRecipients || '';
 
-  let body = `<p>안녕하세요, 운영팀.</p>
+  let body = ``;
+
+  if (data['hasRestrictedKeyword'] === 'TRUE') {
+    body += `<div style="background-color: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+               <h3 style="margin-top: 0; color: #856404;">🚨 당근 유사 업종 정책 위반 주의</h3>
+               <p style="color: #856404; font-size: 13px; margin-bottom: 10px;">제출된 데이터에 당근 제한 키워드가 포함되어 있습니다. 담당자는 아래 예외 조항에 해당하는지 확인 후 처리하시기 바랍니다.</p>
+               <ul style="margin-bottom: 0; padding-left: 20px; font-size: 13px; color: #856404;">
+                 ${data['restrictedKeywordDetails']}
+               </ul>
+             </div>`;
+  }
+
+  body += `<p>안녕하세요, 운영팀.</p>
     <p><b>${senderEmail}</b>님께서 광고 수정을 요청했습니다.</p>
     <p><b>수정 ID: ${modId}</b></p>
     <div style="margin-top: 15px; margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;">

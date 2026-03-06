@@ -191,10 +191,50 @@ currentFormData = {};
         currentFormData['액션명'] = `${actionAmount}만원 이상 구매`;
       }
     }
+
+    let warningBannerHtml = '';
+    if (currentFormData['집행매체1'] === '애디슨 네트워크') {
+      const fieldsToCheck = ['광고주', '브랜드', '특이사항 메모장', '거래처', '문구 - 타이틀', '문구 - 서브', '문구 - 서브2'];
+      let detectedIssues = [];
+
+      fieldsToCheck.forEach(field => {
+        const val = currentFormData[field];
+        if (val && typeof val === 'string') {
+          restrictedKeywordsDB.forEach(item => {
+            if (val.includes(item.keyword)) {
+              detectedIssues.push({ field: field, keyword: item.keyword, exception: item.exception });
+            }
+          });
+        }
+      });
+
+      if (detectedIssues.length > 0) {
+        let alertMsg = '🚨 [주의] 당근 유사 업종 정책 위반 의심 키워드가 감지되었습니다.\n\n';
+        warningBannerHtml = '<div style="background-color: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">';
+        warningBannerHtml += '<h4 style="margin-top: 0; color: #856404;">🚨 당근 유사 업종 정책 위반 주의</h4><ul style="margin-bottom: 0; padding-left: 20px; font-size: 13px; color: #856404;">';
+
+        currentFormData['hasRestrictedKeyword'] = 'TRUE';
+        let emailWarningDetails = '';
+
+        detectedIssues.forEach(issue => {
+          alertMsg += `- [${issue.field}] 항목에 '${issue.keyword}' 포함\n`;
+          warningBannerHtml += `<li style="margin-bottom: 5px;"><b>[${issue.field}]</b> 항목에 <b>'${issue.keyword}'</b> 포함. <br><span style="color: #666;">(예외조건: ${issue.exception || '없음'})</span></li>`;
+          emailWarningDetails += `<li style="margin-bottom: 5px;"><b>[${issue.field}]</b> 항목에 <b>'${issue.keyword}'</b> 포함 <br><span style="color: #666;">(예외조건: ${issue.exception || '없음'})</span></li>`;
+        });
+
+        currentFormData['restrictedKeywordDetails'] = emailWarningDetails;
+
+        alertMsg += '\n확인을 누르시면 모달 창에서 상세 내용과 예외 조항을 확인할 수 있습니다.';
+        warningBannerHtml += '</ul></div>';
+
+        // 1. Alert 창으로 즉시 알림
+        alert(alertMsg);
+      }
+    }
     
 
     const fieldsToEscape = ['특이사항 메모장', '문구 - 타이틀', '문구 - 서브', '문구 - 상세화면 상단 타이틀', '문구 - 서브1 상단', '문구 - 서브1 하단', '문구 - 서브2', '가이드 메세지', '버튼 메세지'];
-    let summaryHtml = '<table>';
+    let summaryHtml = warningBannerHtml + '<table>';
 
     for (const key in currentFormData) {
       if (!key.startsWith('OS_') && !key.startsWith('집행매체2_')) {
@@ -922,6 +962,52 @@ function openModificationRequestModal() {
       }
     }
   });
+
+  let warningBannerHtml = '';
+  
+  // 수정 요청에서는 '매체' 필드가 비어있을 수도 있으므로(기존 애디슨 광고일 수 있음), 
+  // 매체가 '애디슨'을 포함하거나 비어있을 때 검사를 수행합니다.
+  const isEdison = !currentFormData['매체'] || currentFormData['매체'].includes('애디슨');
+  
+  if (isEdison) {
+    const fieldsToCheck = ['주요 요청사항', '대상 광고명'];
+    let detectedIssues = [];
+
+    fieldsToCheck.forEach(field => {
+      const val = currentFormData[field];
+      if (val && typeof val === 'string') {
+        restrictedKeywordsDB.forEach(item => {
+          if (val.includes(item.keyword)) {
+            detectedIssues.push({ field: field, keyword: item.keyword, exception: item.exception });
+          }
+        });
+      }
+    });
+
+    if (detectedIssues.length > 0) {
+      let alertMsg = '🚨 [주의] 당근 유사 업종 정책 위반 의심 키워드가 감지되었습니다.\n\n';
+      warningBannerHtml = '<div style="background-color: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">';
+      warningBannerHtml += '<h4 style="margin-top: 0; color: #856404;">🚨 당근 유사 업종 정책 위반 주의</h4><ul style="margin-bottom: 0; padding-left: 20px; font-size: 13px; color: #856404;">';
+
+      currentFormData['hasRestrictedKeyword'] = 'TRUE';
+      let emailWarningDetails = '';
+
+      detectedIssues.forEach(issue => {
+        alertMsg += `- [${issue.field}] 항목에 '${issue.keyword}' 포함\n`;
+        warningBannerHtml += `<li style="margin-bottom: 5px;"><b>[${issue.field}]</b> 항목에 <b>'${issue.keyword}'</b> 포함. <br><span style="color: #666;">(예외조건: ${issue.exception || '없음'})</span></li>`;
+
+        emailWarningDetails += `<li style="margin-bottom: 5px;"><b>[${issue.field}]</b> 항목에 <b>'${issue.keyword}'</b> 포함 <br><span style="color: #666;">(예외조건: ${issue.exception || '없음'})</span></li>`;
+      });
+
+      currentFormData['restrictedKeywordDetails'] = emailWarningDetails;
+
+      alertMsg += '\n확인을 누르시면 모달 창에서 상세 내용과 예외 조항을 확인할 수 있습니다.';
+      warningBannerHtml += '</ul></div>';
+
+      // Alert 창으로 즉시 알림
+      alert(alertMsg);
+    }
+  }
   
   const fieldOrder = [
    '주요 요청사항', '대상 캠페인 ID', '대상 광고 ID', '대상 광고명', '예약 반영 시점',
@@ -943,7 +1029,7 @@ function openModificationRequestModal() {
   ];
 
 const fieldsToEscape = ['주요 요청사항', '문구 - 타이틀', '문구 - 서브', '문구 - 상세화면 상단 타이틀', '문구 - 서브1 상단', '문구 - 서브1 하단', '문구 - 서브2'];
-  let summaryHtml = '<table>';
+  let summaryHtml = warningBannerHtml + '<table>';
 
   fieldOrder.forEach(key => {
     if (currentFormData.hasOwnProperty(key)) {

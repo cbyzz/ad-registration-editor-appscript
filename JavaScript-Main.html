@@ -7,6 +7,13 @@
 
   window.onload = function() {
   setLoading(true);
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      restrictedKeywordsDB = data;
+    })
+    .getRestrictedKeywords();
+    
   google.script.run
     .withSuccessHandler(function(user) {
       document.getElementById('userInfo').innerText = '안녕하세요, ' + user.split('@')[0] + '님';

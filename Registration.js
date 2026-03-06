@@ -769,6 +769,18 @@ function sendNotification(senderEmail, type, id, data, subType, subject) {
             <p><b>ID: ${id}</b></p>`;
   }
 
+  if (data['hasRestrictedKeyword'] === 'TRUE') {
+    const warningBanner = `<div style="background-color: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+               <h3 style="margin-top: 0; color: #856404;">🚨 당근 유사 업종 정책 위반 주의</h3>
+               <p style="color: #856404; font-size: 13px; margin-bottom: 10px;">제출된 데이터에 당근 제한 키워드가 포함되어 있습니다. 담당자는 아래 예외 조항에 해당하는지 확인 후 처리하시기 바랍니다.</p>
+               <ul style="margin-bottom: 0; padding-left: 20px; font-size: 13px; color: #856404;">
+                 ${data['restrictedKeywordDetails']}
+               </ul>
+             </div>`;
+    // 기존 body의 맨 앞에 경고 배너를 추가합니다.
+    body = warningBanner + body;
+  }
+
   const confirmationUrl = `${ScriptApp.getService().getUrl()}?action=confirm&id=${id}`;
   body += `<div style="margin-top: 15px; margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;">
              <a href="${confirmationUrl}" style="background-color: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; margin-right: 10px;">[ 이 광고 담당하기 ]</a>
