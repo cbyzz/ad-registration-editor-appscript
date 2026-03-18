@@ -976,8 +976,25 @@ function openModificationRequestModal() {
     fieldsToCheck.forEach(field => {
       const val = currentFormData[field];
       if (val && typeof val === 'string') {
+        
+        // ▼▼▼▼▼ [수정] 키워드 검사를 시작하기 전에, '대상 광고명'이 네이버페이로 끝나면 아예 검사 자체를 통과시킴 ▼▼▼▼▼
+        if (field === '대상 광고명') {
+          const trimmedVal = val.trim();
+          const skipEndings = ['네이버페이', '네이버페이_모바일', '네이버페이_AOS', '네이버페이_IOS', '네이버페이_PC'];
+          
+          // 배열 중 하나라도 끝맺음이 일치하거나, '네이버페이_(' 가 포함되어 있는지 확인
+          const isEndingMatch = skipEndings.some(ending => trimmedVal.endsWith(ending));
+          const isIncludeMatch = trimmedVal.includes('네이버페이_(');
+
+          if (isEndingMatch || isIncludeMatch) {
+            return; // 이 필드는 제한업종 DB 검사를 하지 않고 바로 다음 필드로 넘어감
+          }
+        }
+        // ▲▲▲▲▲ [수정] ▲▲▲▲▲
+
         restrictedKeywordsDB.forEach(item => {
           if (val.includes(item.keyword)) {
+            // (이전에 있던 item.keyword === '네이버페이' 조건문은 삭제하셔도 됩니다)
             detectedIssues.push({ field: field, keyword: item.keyword, exception: item.exception });
           }
         });
