@@ -167,7 +167,7 @@ function submitData(formData, subType) {
             case '유튜브_좋아요': conditionPart = "({like:customml}) && (({구독중:text} || {구독 중:text} || {구독충:text} || {subscribed:text}) || ({youtube_subscribe_alarm_all:customml} || {youtube_subscribe_alarm:customml} || {youtube_subscribe_no_alarm:customml})) && (!{캡쳐하기:text} && !{적립받기:text} && !{예시:text})"; break;
             case '좋아요': conditionPart = "({기본:text} || {즐겨찾기:text} || {좋아요:text} || {liked:text} || {팔로우:text}) && (!{캡쳐하기:text} && !{적립받기:text} && !{예시:text} && !{취소:text})"; break;
             case '채널추가': conditionPart = "({kakao_channel:customml} || {kakao_channel_dark:customml} || {추가한 채널:text} || {추가한채널:text} || {추가완료:text} || {추가 완료:text} || {채널을 추가해:text} || {추가해 주셔서:text}) && (!{캡쳐하기:text} && !{적립받기:text}) && (!{예시:text} && !{ch +:text} && !{ch+:text} && !{취소:text})"; break;
-            case '언론사 구독': conditionPart = "(!{뉴스판:text} && !{네이버 메인:text} && !{네이버메인:text} && !{스크린샷:text} && !{구독 이벤트:text} && !{구독이벤트:text})"; break;
+            case '언론사 구독': conditionPart = "({구독중:text} || {구독 중:text} || {subscribed:text}) && (!{뉴스판:text} && !{네이버 메인:text} && !{네이버메인:text} && !{스크린샷:text} && !{구독 이벤트:text} && !{구독이벤트:text})"; break;
             case '틱톡': conditionPart = "({tiktok_subscribe_humanicon1:customml} || {tiktok_subscribe_humanicon2:customml} || {tiktok_subscribe_sendicon:customml}) && (!{캡쳐하기:text} && !{적립받기:text} && !{예시:text})"; break;
             case 'X(트위터)': conditionPart = "({following.*following:regex} || {팔로잉.*팔로잉:regex}) || {twitter_X_subscribe_alarm:customml} && (!{캡쳐하기:text} && !{적립받기:text} && !{팔로우하기:text} && !{예시:text} && !{test:text} && !{가입하기:text})"; break;
           }
@@ -230,7 +230,7 @@ function submitData(formData, subType) {
             case '유튜브_좋아요': conditionPart = "({like:customml}) && (({구독중:text} || {구독 중:text} || {구독충:text} || {subscribed:text}) || ({youtube_subscribe_alarm_all:customml} || {youtube_subscribe_alarm:customml} || {youtube_subscribe_no_alarm:customml})) && (!{캡쳐하기:text} && !{적립받기:text} && !{예시:text})"; break;
             case '좋아요': conditionPart = "({기본:text} || {즐겨찾기:text} || {좋아요:text} || {liked:text} || {팔로우:text}) && (!{캡쳐하기:text} && !{적립받기:text} && !{예시:text} && !{취소:text})"; break;
             case '채널추가': conditionPart = "({kakao_channel:customml} || {kakao_channel_dark:customml} || {추가한 채널:text} || {추가한채널:text} || {추가완료:text} || {추가 완료:text} || {채널을 추가해:text} || {추가해 주셔서:text}) && (!{캡쳐하기:text} && !{적립받기:text}) && (!{예시:text} && !{ch +:text} && !{ch+:text} && !{취소:text})"; break;
-            case '언론사 구독': conditionPart = "(!{뉴스판:text} && !{네이버 메인:text} && !{네이버메인:text} && !{스크린샷:text} && !{구독 이벤트:text} && !{구독이벤트:text})"; break;
+            case '언론사 구독': conditionPart = "({구독중:text} || {구독 중:text} || {subscribed:text}) && (!{뉴스판:text} && !{네이버 메인:text} && !{네이버메인:text} && !{스크린샷:text} && !{구독 이벤트:text} && !{구독이벤트:text})"; break;
             case '틱톡': conditionPart = "({tiktok_subscribe_humanicon1:customml} || {tiktok_subscribe_humanicon2:customml} || {tiktok_subscribe_sendicon:customml}) && (!{캡쳐하기:text} && !{적립받기:text} && !{예시:text})"; break;
             case 'X(트위터)': conditionPart = "({following.*following:regex} || {팔로잉.*팔로잉:regex}) || {twitter_X_subscribe_alarm:customml} && (!{캡쳐하기:text} && !{적립받기:text} && !{팔로우하기:text} && !{예시:text} && !{test:text} && !{가입하기:text})"; break;
           }

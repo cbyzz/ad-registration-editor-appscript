@@ -1,5 +1,5 @@
 // 테스트
-// const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com';
+// const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com,choi.byoungyoul@cashslide.co.kr';
 // const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_TEST_WEBHOOK_URL');
 
 //. 실제 라이브
@@ -676,7 +676,7 @@ try {
  const masterHeaderOrder = [
  '등록ID', '등록일시', '등록자', '상태', '담당자', '담당자 확인 일시', '메일 스레드 ID', '수정 완료 일시', '반려 일시', '반려 사유',
  '주요 요청사항', '대상 캠페인 ID', '대상 광고 ID', '대상 광고명', '예약 반영 시점',
- '광고주 연동 토큰 값', '매체', '단가', '총물량', '리워드', '일물량',
+ '광고주 연동 토큰 값', '매체', '단가', '총물량', '총예산', '리워드', '일물량', '일예산',
  '광고 집행 시작 일시', '광고 집행 종료 일시', '광고 노출 중단 시작일시', '광고 노출 중단 종료일시', '광고 참여 시작 후 완료 인정 유효기간 (일단위)',
  '트래커', '완료 이벤트 이름', '트래커 추가 정보 입력',
  'URL - 기본', 'URL - AOS', 'URL - IOS', 'URL - PC',
@@ -854,7 +854,7 @@ function sendModificationRequestNotification(senderEmail, modId, subject, data) 
 
   const fieldOrder = [
   '주요 요청사항', '대상 캠페인 ID', '대상 광고 ID', '대상 광고명', '예약 반영 시점',
-  '광고주 연동 토큰 값', '매체', '단가', '총물량', '리워드', '일물량',
+  '광고주 연동 토큰 값', '매체', '단가', '총물량', '총예산', '리워드', '일물량', '일예산',
   '광고 집행 시작 일시', '광고 집행 종료 일시', '광고 노출 중단 시작일시', '광고 노출 중단 종료일시', '광고 참여 시작 후 완료 인정 유효기간 (일단위)',
   '트래커', '완료 이벤트 이름', '트래커 추가 정보 입력', 'URL - 기본', 'URL - AOS', 'URL - IOS', 'URL - PC',
     '기본 URL',
@@ -2023,7 +2023,7 @@ function sendCopyCreationNotification(senderEmail, id, subject, formData, modifi
      body += `<tr><td colspan="2" style="padding: 8px; border: 1px solid #e0e0e0; background-color: #f0f0f0; font-weight: bold; text-align: center;">신규 생성 광고 반영 항목</td></tr>`;
      
      const orderedKeys = [
-       '광고주 연동 토큰 값', '매체', '단가', '총물량', '리워드', '일물량',
+       '광고주 연동 토큰 값', '매체', '단가', '총물량', '총예산', '리워드', '일물량', '일예산',
        '광고 집행 시작 일시', '광고 집행 종료 일시', '광고 노출 중단 시작일시', '광고 노출 중단 종료일시',
        '광고 참여 시작 후 완료 인정 유효기간 (일단위)', '트래커', '완료 이벤트 이름', '트래커 추가 정보 입력',
        'URL - 기본', 'URL - AOS', 'URL - IOS', 'URL - PC',
@@ -2136,12 +2136,17 @@ function recordCopyCreationConfirmation(id, approverEmail) {
   sheet.getRange(rowIndex, timeIndex + 1).setValue(Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"));
 
   // 메일 답장
-  const threadId = rowData[headers.indexOf('mail_thread_id')];
-  if (threadId) {
-    try {
-      GmailApp.getThreadById(threadId).replyAll("", { htmlBody: `<p><b>${approverEmail}</b> 님이 <b>ID: ${id}</b> 건의 담당자로 지정되었습니다.</p><p><a href="${SYSTEM_URL}">시스템 바로가기</a></p>` });
-    } catch(e) { console.error(e); }
-  }
+  try {
+    const searchQuery = `"ID: ${id}"`;
+    const threads = GmailApp.search(searchQuery, 0, 1);
+    if (threads && threads.length > 0) {
+      threads[0].replyAll("", { htmlBody: `<p>안녕하세요,</p><p><b>${approverEmail}</b> 님이 <b>ID: ${id}</b> 건의 담당자로 지정되어 처리를 진행합니다.</p><p><a href="${SYSTEM_URL}">시스템 바로가기</a></p>` });
+    } else {
+      console.warn(`복사 생성 담당자 지정 알림 실패: ID ${id} 관련 메일을 찾을 수 없습니다.`);
+    }
+  } catch(e) { console.error(e); }
+  // ▲▲▲ 여기까지 수정 ▲▲▲
+  
   return `ID: ${id} 담당자로 지정되었습니다.`;
 }
 
@@ -2202,13 +2207,18 @@ function processCopyCreationSkip(id) {
 
     sheet.getRange(rowIndex, statusIndex + 1).setValue('스킵처리');
 
-    if (threadId) {
-      try {
-        GmailApp.getThreadById(threadId).replyAll("", {
-          htmlBody: `<p>안녕하세요,</p><p>요청하신 <b>복사 생성 ID: ${id}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`
-        });
-      } catch (e) { console.error(e); }
-    }
+    const emailBody = `<p>안녕하세요,</p><p>요청하신 <b>복사 생성 ID: ${id}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`;
+    
+    try {
+      const searchQuery = `"ID: ${id}"`;
+      const threads = GmailApp.search(searchQuery, 0, 1);
+      
+      if (threads && threads.length > 0) {
+        threads[0].replyAll("", { htmlBody: emailBody });
+      } else if (registrantEmail) {
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 요청하신 복사 생성(ID: ${id})이 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
+      }
+    } catch (e) { console.error(e); }
 
     try {
       const slackMessage = { 'text': `[복사 생성 스킵] ${targetAdName} (ID: ${id})` };
@@ -2252,18 +2262,28 @@ function processCopyCreationRejection(id, reason) {
     // 반려 알림 메일 (ID 입력 없는 단순 완료 처리와 대칭되는 개념)
     if (registrantEmail) {
       const subject = `[광고 등록 시스템] 요청하신 복사 생성(ID: ${id})이 반려되었습니다.`;
-      let body = `<p>안녕하세요, ${registrantEmail.split('@')[0]}님.</p><p>요청하신 <b>ID: ${id}</b> 건이 반려되었습니다.</p>`;
-      if (reason) body += `<p><b>반려 사유:</b> ${reason.replace(/\n/g, '<br>')}</p>`;
-      body += `<p>수정 후 재요청하시거나 담당자(${rejectorEmail})에게 문의해주세요.</p><p><a href="${SYSTEM_URL}">시스템 바로가기</a></p>`;
+      let emailBody = `<p>안녕하세요, ${registrantEmail.split('@')[0]}님.</p><p>요청하신 <b>ID: ${id}</b> 건이 반려되었습니다.</p>`;
+      if (reason) emailBody += `<p><b>반려 사유:</b> ${reason.replace(/\n/g, '<br>')}</p>`;
+      emailBody += `<p>수정 후 재요청하시거나 담당자(${rejectorEmail})에게 문의해주세요.</p><p><a href="${SYSTEM_URL}">시스템 바로가기</a></p>`;
 
-      if (threadId) {
-        try {
-          GmailApp.getThreadById(threadId).replyAll("", { htmlBody: body, cc: registrantEmail });
-        } catch (e) {
-          GmailApp.sendEmail(registrantEmail, subject, '', { htmlBody: body });
+      const mailOptions = {
+        htmlBody: emailBody,
+        cc: registrantEmail
+      };
+
+      try {
+        const searchQuery = `"ID: ${id}"`;
+        const threads = GmailApp.search(searchQuery, 0, 1);
+
+        if (threads && threads.length > 0) {
+          threads[0].replyAll('', mailOptions);
+        } else {
+          console.warn(`복사 생성 반려: 스레드 찾기 실패(${id}). 새 메일 발송.`);
+          GmailApp.sendEmail(registrantEmail, subject, '', mailOptions);
         }
-      } else {
-        GmailApp.sendEmail(registrantEmail, subject, '', { htmlBody: body });
+      } catch (e) {
+        console.error(`복사 생성 반려 메일 발송 실패 (ID: ${id}): ${e.toString()}`);
+        GmailApp.sendEmail(registrantEmail, subject, '', mailOptions);
       }
     }
 
