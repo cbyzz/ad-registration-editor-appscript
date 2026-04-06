@@ -1079,6 +1079,8 @@ function processCompletion(registrationId, adId, completerEmail) {
     sheet.getRange(rowIndex, adIdColIndex + 1).setValue("'" + adId);
     sheet.getRange(rowIndex, completionDateColIndex + 1).setValue(timestamp);
 
+    addToVerificationQueue('광고', headers, rowData, adId);
+
 
     logUserAction(completerEmail, '등록 완료 처리', {
       targetId: registrationId,
@@ -1101,18 +1103,23 @@ function processSkip(adId) {
     const statusColIndex = found.headers.indexOf('상태');
     found.sheet.getRange(found.rowIndex, statusColIndex + 1).setValue('스킵처리');
 
-    const threadIdColIndex = found.headers.indexOf('메일 스레드 ID');
-    const threadId = (threadIdColIndex > -1) ? found.rowData[threadIdColIndex] : null;
-    if (threadId) {
-      try {
-        const thread = GmailApp.getThreadById(threadId);
-        if (thread) {
-          thread.replyAll("", { // .reply() -> .replyAll()로 변경
-            htmlBody: `<p>안녕하세요,</p><p>요청하신 <b>ID: ${adId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`,
-          });
-        }
-      } catch (e) {
-        console.error(`스킵 알림 메일 발송 실패(ID: ${adId}): ${e.toString()}`);
+    const registrantEmail = found.rowData[found.headers.indexOf('등록자')]; // 등록자 이메일 가져오기
+    const emailBody = `<p>안녕하세요,</p><p>요청하신 <b>ID: ${adId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`;
+
+    try {
+      const searchQuery = `"ID: ${adId}"`;
+      const threads = GmailApp.search(searchQuery, 0, 1);
+      
+      if (threads && threads.length > 0) {
+        threads[0].replyAll("", { htmlBody: emailBody });
+      } else if (registrantEmail) {
+        console.warn(`스킵 스레드 찾기 실패. 새 메일 발송(ID: ${adId})`);
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 요청하신 광고(ID: ${adId})가 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
+      }
+    } catch (e) {
+      console.error(`스킵 알림 메일 발송 실패(ID: ${adId}): ${e.toString()}`);
+      if (registrantEmail) {
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 요청하신 광고(ID: ${adId})가 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
       }
     }
 

@@ -681,22 +681,30 @@ function processCashslideSkip(adId) {
     const campaignNameIndex = headers.indexOf('campaign_name');
 
     // 1. 시트 상태를 '스킵처리'로 업데이트
+    const registrantColIndex = headers.indexOf('registrant');
     sheet.getRange(rowIndex, statusColIndex + 1).setValue('스킵처리');
 
     const threadId = rowData[threadIdColIndex];
     const campaignName = rowData[campaignNameIndex] || adId;
+    const registrantEmail = rowData[registrantColIndex]; // 추가
 
     // 2. 원본 요청 메일 스레드에 스킵 처리되었음을 회신
-    if (threadId) {
-      try {
-        const thread = GmailApp.getThreadById(threadId);
-        if (thread) {
-          thread.replyAll("", {
-            htmlBody: `<p>안녕하세요,</p><p>요청하신 <b>캐시슬라이드 ID: ${adId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`,
-          });
-        }
-      } catch (e) {
-        console.error(`캐시슬라이드 스킵 알림 메일 발송 실패(ID: ${adId}): ${e.toString()}`);
+    const emailBody = `<p>안녕하세요,</p><p>요청하신 <b>캐시슬라이드 ID: ${adId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`;
+    
+    try {
+      const searchQuery = `"ID: ${adId}"`;
+      const threads = GmailApp.search(searchQuery, 0, 1);
+      
+      if (threads && threads.length > 0) {
+        threads[0].replyAll("", { htmlBody: emailBody });
+      } else if (registrantEmail) {
+        console.warn(`캐시슬라이드 스킵 스레드 찾기 실패. 새 메일 발송(ID: ${adId})`);
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 요청하신 캐시슬라이드 광고(ID: ${adId})가 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
+      }
+    } catch (e) {
+      console.error(`캐시슬라이드 스킵 알림 메일 발송 실패(ID: ${adId}): ${e.toString()}`);
+      if (registrantEmail) {
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 요청하신 캐시슬라이드 광고(ID: ${adId})가 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
       }
     }
 

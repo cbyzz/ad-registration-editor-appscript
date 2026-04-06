@@ -523,23 +523,32 @@ function processDspSkip(dspId) {
     const threadIdColIndex = headers.indexOf('mail_thread_id');
     const campaignNameIndex = headers.indexOf('campaign_name');
 
+    const registrantColIndex = headers.indexOf('registrant'); // 누락되었던 등록자 열 인덱스 변수 추가
+
     // 1. 시트 상태 업데이트
     sheet.getRange(rowIndex, statusColIndex + 1).setValue('스킵처리');
 
     const threadId = rowData[threadIdColIndex];
     const campaignName = rowData[campaignNameIndex] || dspId;
+    const registrantEmail = rowData[registrantColIndex]; // 등록자 이메일 가져오기
 
     // 2. 메일 알림 발송 (전체 회신)
-    if (threadId) {
-      try {
-        const thread = GmailApp.getThreadById(threadId);
-        if (thread) {
-          thread.replyAll("", {
-            htmlBody: `<p>안녕하세요,</p><p>요청하신 <b>DSP ID: ${dspId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`,
-          });
-        }
-      } catch (e) {
-        console.error(`DSP 스킵 알림 메일 발송 실패(ID: ${dspId}): ${e.toString()}`);
+    const emailBody = `<p>안녕하세요,</p><p>요청하신 <b>DSP ID: ${dspId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`;
+    
+    try {
+      const searchQuery = `"ID: ${dspId}"`;
+      const threads = GmailApp.search(searchQuery, 0, 1);
+      
+      if (threads && threads.length > 0) {
+        threads[0].replyAll("", { htmlBody: emailBody });
+      } else if (registrantEmail) {
+        console.warn(`DSP 스킵 스레드 찾기 실패. 새 메일 발송(ID: ${dspId})`);
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 요청하신 DSP 광고(ID: ${dspId})가 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
+      }
+    } catch (e) {
+      console.error(`DSP 스킵 알림 메일 발송 실패(ID: ${dspId}): ${e.toString()}`);
+      if (registrantEmail) {
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 요청하신 DSP 광고(ID: ${dspId})가 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
       }
     }
 
@@ -812,26 +821,34 @@ function processDspModificationSkip(dspModId) {
     const adNameIndex = headers.indexOf('target_ad_name');
 
     // 1. 시트 상태를 '스킵처리'로 업데이트
+    const registrantColIndex = headers.indexOf('registrant');
     sheet.getRange(rowIndex, statusColIndex + 1).setValue('스킵처리');
 
     const threadId = rowData[threadIdColIndex];
     const adName = rowData[adNameIndex] || dspModId;
+    const registrantEmail = rowData[registrantColIndex];
     
     // ▼▼▼ [수정] adName을 String()으로 감싸서 타입을 강제로 텍스트로 변환 ▼▼▼
     const subject = String(adName).split('\n')[0];
     // ▲▲▲ [수정] ▲▲▲
 
     // 2. 원본 요청 메일 스레드에 스킵 처리되었음을 회신
-    if (threadId) {
-      try {
-        const thread = GmailApp.getThreadById(threadId);
-        if (thread) {
-          thread.replyAll("", {
-            htmlBody: `<p>안녕하세요,</p><p>요청하신 <b>DSP 수정 ID: ${dspModId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`,
-          });
-        }
-      } catch (e) {
-        console.error(`DSP 수정 스킵 알림 메일 발송 실패(ID: ${dspModId}): ${e.toString()}`);
+    const emailBody = `<p>안녕하세요,</p><p>요청하신 <b>DSP 수정 ID: ${dspModId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`;
+    
+    try {
+      const searchQuery = `"${dspModId}"`;
+      const threads = GmailApp.search(searchQuery, 0, 1);
+      
+      if (threads && threads.length > 0) {
+        threads[0].replyAll("", { htmlBody: emailBody });
+      } else if (registrantEmail) {
+        console.warn(`DSP 수정 스킵 스레드 찾기 실패. 새 메일 발송(ID: ${dspModId})`);
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 요청하신 DSP 수정(ID: ${dspModId})이 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
+      }
+    } catch (e) {
+      console.error(`DSP 수정 스킵 알림 메일 발송 실패(ID: ${dspModId}): ${e.toString()}`);
+      if (registrantEmail) {
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 요청하신 DSP 수정(ID: ${dspModId})이 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
       }
     }
 
