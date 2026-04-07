@@ -1,5 +1,5 @@
 // 테스트
-// const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com,my122022@gmail.com';
+// const ADMIN_EMAIL = 'choi.byoungyoul@nbt.com';
 // const SLACK_WEBHOOK_URL = PropertiesService.getScriptProperties().getProperty('SLACK_TEST_WEBHOOK_URL');
 
 //. 실제 라이브
@@ -483,8 +483,9 @@ function submitCouponRequest(formData) {
     
     // 관리 및 데이터 컬럼 정의
     const headers = [
-      'id', 'timestamp', 'registrant', 'status', 'manager', 'manager_timestamp', 'completion_timestamp', // 시스템 관리용
-      'subject', // 메일 제목 (검색용)
+      'id', 'timestamp', 'registrant', 'status', 'manager', 'manager_timestamp', 'completion_timestamp',
+      'rejection_timestamp', 'rejection_reason', // 추가
+      'subject',
       'target_ad_id', 'target_ad_name', 'amount', 'coupon_name', 'quantity', 'expiry_date', 'additional_request'
     ];
 
@@ -510,6 +511,7 @@ function submitCouponRequest(formData) {
     // 4. 시트 저장
     const newRow = [
       uniqueId, formattedTimestamp, userEmail, '등록 요청 완료', '', '', '',
+      '', '', 
       subject,
       formData['대상 광고 ID'], formData['대상 광고명'],
       formData['쿠폰 금액'], formData['쿠폰 명'], formData['쿠폰 발급 수량'],
@@ -2308,5 +2310,140 @@ function processCopyCreationRejection(id, reason) {
     return { success: true, message: `ID(${id})가 성공적으로 반려 처리되었습니다.` };
   } catch (e) {
     return { success: false, message: `오류 발생: ${e.toString()}` };
+  }
+}
+
+
+/**
+ * 쿠폰 요청 ID를 기반으로 데이터를 객체로 가져옵니다.
+ */
+function getCouponDataById(couponId) {
+  const found = findCouponRowById(couponId);
+  if (found) {
+    const data = {};
+    found.headers.forEach((header, index) => {
+      let value = found.rowData[index];
+      if (value instanceof Date) {
+        try {
+          value = Utilities.formatDate(value, "Asia/Seoul", "yyyy-MM-dd HH:mm");
+        } catch(e) {
+          value = '날짜 형식 오류';
+        }
+      }
+      data[header] = value;
+    });
+    return data;
+  }
+  return null;
+}
+
+/**
+ * 쿠폰 발급 요청을 스킵 처리합니다.
+ */
+function processCouponSkip(couponId) {
+  try {
+    const skipperEmail = Session.getActiveUser().getEmail();
+    const found = findCouponRowById(couponId);
+    if (!found) {
+      return { success: false, message: `쿠폰 요청 ID(${couponId})를 찾을 수 없습니다.` };
+    }
+
+    const { sheet, rowIndex, headers, rowData } = found;
+    const statusColIndex = headers.indexOf('status');
+    const registrantColIndex = headers.indexOf('registrant');
+    const subjectColIndex = headers.indexOf('subject');
+
+    sheet.getRange(rowIndex, statusColIndex + 1).setValue('스킵처리');
+
+    const registrantEmail = rowData[registrantColIndex];
+    const savedSubject = rowData[subjectColIndex] || couponId;
+
+    const emailBody = `<p>안녕하세요,</p><p>요청하신 <b>쿠폰 요청 ID: ${couponId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`;
+
+    try {
+      const threads = GmailApp.search(`"${couponId}"`, 0, 1);
+      if (threads && threads.length > 0) {
+        threads[0].replyAll("", { htmlBody: emailBody });
+      } else if (registrantEmail) {
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 쿠폰 요청(ID: ${couponId})이 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
+      }
+    } catch (e) {
+      console.error(`쿠폰 스킵 알림 메일 발송 실패(ID: ${couponId}): ${e.toString()}`);
+    }
+
+    try {
+      UrlFetchApp.fetch(SLACK_WEBHOOK_URL, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ 'text': `[쿠폰 발급 스킵] (ID: ${couponId})` }) });
+    } catch (e) {
+      console.error(`쿠폰 스킵 슬랙 발송 실패: ${e.toString()}`);
+    }
+
+    logUserAction(skipperEmail, '쿠폰 요청 스킵', { targetId: couponId });
+    return { success: true, message: `쿠폰 요청 ID(${couponId})가 성공적으로 스킵 처리되었습니다.` };
+  } catch (e) {
+    console.error(`processCouponSkip Error: ${e.toString()}`);
+    return { success: false, message: '스킵 처리 중 오류가 발생했습니다: ' + e.toString() };
+  }
+}
+
+/**
+ * 쿠폰 발급 요청을 반려 처리합니다.
+ */
+function processCouponRejection(couponId, reason) {
+  try {
+    const rejectorEmail = Session.getActiveUser().getEmail();
+    const found = findCouponRowById(couponId);
+    if (!found) {
+      return { success: false, message: `쿠폰 요청 ID(${couponId})를 찾을 수 없습니다.` };
+    }
+
+    const { sheet, rowIndex, headers, rowData } = found;
+    const statusColIndex = headers.indexOf('status');
+    const registrantColIndex = headers.indexOf('registrant');
+
+    const timestamp = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+    sheet.getRange(rowIndex, statusColIndex + 1).setValue('반려');
+
+    // rejection 컬럼이 있으면 사유 저장 (없어도 에러 안남)
+    const rejectionReasonColIndex = headers.indexOf('rejection_reason');
+    const rejectionTimeColIndex = headers.indexOf('rejection_timestamp');
+    if (rejectionReasonColIndex > -1) sheet.getRange(rowIndex, rejectionReasonColIndex + 1).setValue(reason);
+    if (rejectionTimeColIndex > -1) sheet.getRange(rowIndex, rejectionTimeColIndex + 1).setValue(timestamp);
+
+    const registrantEmail = rowData[registrantColIndex];
+
+    if (registrantEmail) {
+      const subject = `[광고 등록 시스템] 쿠폰 요청(ID: ${couponId})이 반려되었습니다.`;
+      let emailBody = `<p>안녕하세요, ${registrantEmail.split('@')[0]}님.</p>
+                       <p>요청하신 쿠폰(ID: <b>${couponId}</b>)이 아래 사유로 반려되었습니다.</p>`;
+      if (reason) {
+        emailBody += `<div style="padding: 12px; border: 1px solid #ddd; background-color: #f9f9f9; margin-top: 10px;">${reason.replace(/\n/g, '<br>')}</div>`;
+      }
+      emailBody += `<p style="margin-top:20px;">수정 후 재요청하시거나 담당자(${rejectorEmail})에게 문의해주세요.</p>
+                    <p><a href="${SYSTEM_URL}">시스템 바로가기</a></p>`;
+
+      try {
+        const threads = GmailApp.search(`"${couponId}"`, 0, 1);
+        if (threads && threads.length > 0) {
+          threads[0].replyAll('', { htmlBody: emailBody, cc: registrantEmail });
+        } else {
+          GmailApp.sendEmail(registrantEmail, subject, '', { htmlBody: emailBody });
+        }
+      } catch (e) {
+        console.error(`쿠폰 반려 메일 발송 실패: ${e.toString()}`);
+        GmailApp.sendEmail(registrantEmail, subject, '', { htmlBody: emailBody });
+      }
+    }
+
+    try {
+      UrlFetchApp.fetch(SLACK_WEBHOOK_URL, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ 'text': `[쿠폰 발급 반려] (ID: ${couponId})` }) });
+    } catch (e) {
+      console.error(`쿠폰 반려 슬랙 발송 실패: ${e.toString()}`);
+    }
+
+    logUserAction(rejectorEmail, '쿠폰 요청 반려', { targetId: couponId, message: `사유: ${reason}` });
+    return { success: true, message: `쿠폰 요청 ID(${couponId})가 성공적으로 반려 처리되었습니다.` };
+  } catch (e) {
+    console.error(`processCouponRejection Error: ${e.toString()}`);
+    return { success: false, message: '반려 처리 중 오류가 발생했습니다: ' + e.toString() };
   }
 }

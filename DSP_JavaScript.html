@@ -410,23 +410,17 @@ function openDspConfirmationModal() {
         let rawValue = currentFormData[field.name];
         if (rawValue === undefined) return;
 
-        let displayValue = String(rawValue);
-        if (fieldsToEscape.includes(field.name)) {
-          displayValue = displayValue.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-
         if (field.type === 'group_checkbox') {
             if (rawValue) {
                  summaryHtml += `<tr><th>${field.label}</th><td>체크됨</td></tr>`;
-                 // 하위 필드들도 표시
                  field.subFields.forEach(sf => {
                      if(currentFormData[sf.name]) {
-                        summaryHtml += `<tr><th style="padding-left: 25px;"> L ${sf.label}</th><td>${String(currentFormData[sf.name]).replace(/\n/g, '<br>')}</td></tr>`;
+                        summaryHtml += `<tr><th style="padding-left: 25px;"> L ${sf.label}</th><td>${formatForModalDisplay(currentFormData[sf.name], false)}</td></tr>`;
                      }
                  });
             }
         } else if (field.type !== 'heading' && field.type !== 'media_pivot_table') {
-            summaryHtml += `<tr><th>${field.label}</th><td>${displayValue.replace(/\n/g, '<br>')}</td></tr>`;
+            summaryHtml += `<tr><th>${field.label}</th><td>${formatForModalDisplay(rawValue, fieldsToEscape.includes(field.name), field.name)}</td></tr>`;
         }
     });
     summaryHtml += '</table><h4>매체별 상세 설정</h4>';
@@ -951,8 +945,7 @@ function openDspModificationModal() {
 
   fieldOrder.forEach(key => {
     if (currentFormData[key]) {
-      const displayValue = String(currentFormData[key]).replace(/\n/g, '<br>');
-      summaryHtml += `<tr><th>${key}</th><td>${displayValue}</td></tr>`;
+      summaryHtml += `<tr><th>${key}</th><td>${formatForModalDisplay(currentFormData[key], false, key)}</td></tr>`;
     }
   });
   summaryHtml += '</table>';

@@ -5,6 +5,70 @@
   let currentEditingSheet = '';
   let isDataLoading = false; 
 
+
+/**
+   * 숫자로만 이루어진 값에 천 단위 콤마를 추가하여 반환합니다.
+   */
+  function formatNumberWithComma(value) {
+    if (value === null || value === undefined) return '';
+    const str = String(value).trim();
+    if (/^-?\d+(\.\d+)?$/.test(str)) {
+      const parts = str.split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return parts.join('.');
+    }
+    return str;
+  }
+
+  /**
+   * 콤마를 찍어야 할 필드명 목록
+   */
+  const COMMA_FORMAT_FIELDS = [
+    '단가', '예산', '총물량', '일물량', '리워드', '총예산', '일예산',
+    '총물량_통합', '총물량_AOS', '총물량_IOS',
+    '일물량_통합', '일물량_AOS', '일물량_IOS',
+    '총예산_통합', '총예산_AOS', '총예산_IOS',
+    '일예산_통합', '일예산_AOS', '일예산_IOS',
+    '광고 단가', '광고 단가', '광고비 R/S율',
+    '최소 결제 금액', '최대 인정 결정 금액',
+    '쿠폰 금액', '쿠폰 발급 수량',
+    '일물량', '일예산',
+    // DSP
+    '총물량', '일물량', '광고 단가', '총예산',
+    // 캐시슬라이드
+    '일물량',
+    // 쿠키오븐 CPS
+    '쿠키오븐 CPS_최소 결제 금액',
+    // 네이버페이 CPS
+    '네이버페이 CPS_본광고_최소 결제 금액', '네이버페이 CPS_부스팅_최소 결제 금액',
+    '네이버페이 CPS_본광고_(메타) 클릭 리워드 지급 금액',
+    // 수정 요청
+    '총물량', '총예산', '리워드', '일물량', '일예산', '단가',
+    // 캠페인캡
+    '캠페인캡'
+  ];
+
+  /**
+   * 모달 미리보기용 표시 변환 함수
+   * @param {string} value - 원본 값
+   * @param {boolean} shouldEscape - HTML 이스케이프 여부
+   * @param {string} fieldName - 필드명 (콤마 적용 판단용)
+   */
+  function formatForModalDisplay(value, shouldEscape, fieldName) {
+    if (value === null || value === undefined) return '';
+    let str = String(value);
+    if (shouldEscape) {
+      str = str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    // 지정된 필드명일 때만 숫자에 콤마 적용
+    if (fieldName && COMMA_FORMAT_FIELDS.includes(fieldName)) {
+      str = str.split('\n').map(line => formatNumberWithComma(line)).join('\n');
+    }
+    return str.replace(/\n/g, '<br>');
+  }
+
+
+
   window.onload = function() {
   setLoading(true);
 
@@ -135,7 +199,11 @@ if (sectionId.startsWith('cashslide')) {
   
   if (sectionId === 'couponRequestSection') {
     flatpickr("#couponExpiryDate", { dateFormat: "Y-m-d" });
-  } 
+  }
+  
+  if (sectionId === 'couponLoadSection') {
+    document.getElementById('loadCouponId').value = '';
+  }
   
   if (sectionId === 'modificationRequestSection') {
     buildModificationRequestForm();
@@ -279,21 +347,15 @@ function openCopyCreationModal() {
   const mainKeys = ['주요 요청사항', '캠페인 ID', '복사 대상 광고 ID', '복사 대상 광고명', '수정 필요 광고 ID', '수정 필요 광고명'];
   mainKeys.forEach(key => {
     if (currentFormData[key]) {
-      let val = currentFormData[key];
-      if (key === '주요 요청사항') val = val.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      summaryHtml += `<tr><th>${key}</th><td>${val.replace(/\n/g, '<br>')}</td></tr>`;
+      summaryHtml += `<tr><th>${key}</th><td>${formatForModalDisplay(currentFormData[key], key === '주요 요청사항', key)}</td></tr>`;
     }
   });
 
   // 나머지(선택) 필드 표시
   for (const key in currentFormData) {
     if (!mainKeys.includes(key)) {
-      let val = String(currentFormData[key]);
-      // 특수문자 처리 필요한 필드 확인 (기존 수정 요청과 동일한 필드들)
       const fieldsToEscape = ['문구 - 타이틀', '문구 - 서브', '문구 - 상세화면 상단 타이틀', '문구 - 서브1 상단', '문구 - 서브1 하단', '문구 - 서브2'];
-      if (fieldsToEscape.includes(key)) val = val.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      
-      summaryHtml += `<tr><th>${key}</th><td>${val.replace(/\n/g, '<br>')}</td></tr>`;
+      summaryHtml += `<tr><th>${key}</th><td>${formatForModalDisplay(currentFormData[key], fieldsToEscape.includes(key), key)}</td></tr>`;
     }
   }
   summaryHtml += '</table>';

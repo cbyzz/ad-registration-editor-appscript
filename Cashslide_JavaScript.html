@@ -698,8 +698,7 @@ function openCashslideConfirmationModal() {
           if (Array.isArray(value)) {
               value = value.join(', ');
           }
-          const displayValue = String(value).replace(/\n/g, '<br>');
-          summaryHtml += `<tr><th>${field.name}</th><td>${displayValue}</td></tr>`;
+          summaryHtml += `<tr><th>${field.name}</th><td>${formatForModalDisplay(value, false, field.name)}</td></tr>`;
       }
   });
 
@@ -718,8 +717,7 @@ function openCashslideConfirmationModal() {
                summaryHtml += `<tr><th>${field.name}</th><td>${scrollableDiv}</td></tr>`;
             }
           } else {
-            const displayValue = String(value).replace(/\n/g, '<br>');
-            summaryHtml += `<tr><th>${field.name}</th><td>${displayValue}</td></tr>`;
+            summaryHtml += `<tr><th>${field.name}</th><td>${formatForModalDisplay(value, false, field.name)}</td></tr>`;
           }
         }
       });
@@ -1347,7 +1345,7 @@ function openCashslideModificationModal() {
     formData.forEach((value, key) => {
         if (value && value.trim()) {
             currentFormData[key] = value;
-            summaryHtml += `<tr><th>${key}</th><td>${value.replace(/\n/g, '<br>')}</td></tr>`;
+            summaryHtml += `<tr><th>${key}</th><td>${formatForModalDisplay(value, false, key)}</td></tr>`;
         }
     });
     summaryHtml += '</table>';

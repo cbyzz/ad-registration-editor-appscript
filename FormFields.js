@@ -782,7 +782,7 @@ const detailInfoDefault = `・ 이벤트 참여 완료 시 쿠키가 지급되�
         { name: '문구 - 타이틀', type: 'text', required: true },
         { name: '문구 - 서브', type: 'text', required: true },
         { name: '문구 - 서브1 상단', type: 'text', required: true },
-        { name: '액션 버튼', type: 'text', required: true, defaultValue: '참여하고 24시간 뒤에 {UNIT} 받기' },
+        { name: '액션 버튼', type: 'text', required: true },
         { name: '문구 - 서브2', type: 'textarea', required: true },
         { name: '노출 대상', type: 'select', options: ['모든 사용자', '테스트 사용자'], required: true },
       ]

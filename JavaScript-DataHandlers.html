@@ -239,18 +239,13 @@ currentFormData = {};
     for (const key in currentFormData) {
       if (!key.startsWith('OS_') && !key.startsWith('집행매체2_')) {
         let value = currentFormData[key];
-        let displayValue = String(value);
 
-        // 지정된 필드에 대해서만 HTML 태그를 안전한 텍스트로 변환
-        if (fieldsToEscape.includes(key)) {
-          displayValue = displayValue.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-        
         if (subType === '멀티미션' && key === '미션 정보 붙여넣기') {
           const missionTableHtml = generateMissionTableHtml(value);
           summaryHtml += `<tr><th>${key}</th><td>${missionTableHtml}</td></tr>`;
         } else {
-          summaryHtml += `<tr><th>${key}</th><td>${displayValue.replace(/\n/g, '<br>')}</td></tr>`;
+          const displayValue = formatForModalDisplay(value, fieldsToEscape.includes(key), key);
+          summaryHtml += `<tr><th>${key}</th><td>${displayValue}</td></tr>`;
         }
       }
     }
@@ -1054,16 +1049,12 @@ const fieldsToEscape = ['주요 요청사항', '문구 - 타이틀', '문구 - �
       if (Array.isArray(value)) {
         value = value.join(', ');
       }
-      
-      let displayValue = String(value);
-      // 지정된 필드에 대해서만 HTML 태그를 안전한 텍스트로 변환
-      if (fieldsToEscape.includes(key)) {
-        displayValue = displayValue.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      }
-
-      summaryHtml += `<tr><th>${key.replace(/_/g, ' ')}</th><td>${displayValue.replace(/\n/g, '<br>')}</td></tr>`;
+      const displayValue = formatForModalDisplay(value, fieldsToEscape.includes(key), key);
+      summaryHtml += `<tr><th>${key.replace(/_/g, ' ')}</th><td>${displayValue}</td></tr>`;
     }
   });
+
+
   summaryHtml += '</table>';
   document.getElementById('modalSummary').innerHTML = summaryHtml;
 
@@ -1232,9 +1223,11 @@ function openModificationShareModal() {
   formData.forEach((value, key) => {
     if (value.trim()) {
       currentFormData[key] = value;
-      summaryHtml += `<tr><th>${key}</th><td>${value.replace(/\n/g, '<br>')}</td></tr>`;
+       summaryHtml += `<tr><th>${key}</th><td>${formatForModalDisplay(value, false, key)}</td></tr>`;
     }
   });
+
+
   summaryHtml += '</table>';
 
   const modalTitle = `[광고 수정 공유] ${currentFormData['대상 광고명'].split('\n')[0]}`;
@@ -1291,7 +1284,7 @@ function openCouponRequestModal() {
   formData.forEach((value, key) => {
     if (value.trim()) {
       currentFormData[key] = value;
-      summaryHtml += `<tr><th>${key}</th><td>${value.replace(/\n/g, '<br>')}</td></tr>`;
+      summaryHtml += `<tr><th>${key}</th><td>${formatForModalDisplay(value, false, key)}</td></tr>`;
     }
   });
   summaryHtml += '</table>';
@@ -1328,6 +1321,109 @@ function submitCouponRequest() {
         })
         .withFailureHandler(handleError)
         .submitCouponRequest(currentFormData);
+}
+
+
+function loadCouponData() {
+  const couponId = document.getElementById('loadCouponId').value.trim();
+  if (!couponId) {
+    showMessage('불러올 쿠폰 요청 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      setLoading(false);
+      if (data) {
+        populateCouponFormWithData(data);
+      } else {
+        showMessage(`쿠폰 요청 ID '${couponId}'를 찾을 수 없습니다.`, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .getCouponDataById(couponId);
+}
+
+function populateCouponFormWithData(data) {
+  showSection('couponRequestSection');
+
+  setTimeout(() => {
+    const form = document.getElementById('couponRequestForm');
+    form.reset();
+
+    const dataMap = {
+      'target_ad_id': '대상 광고 ID',
+      'target_ad_name': '대상 광고명',
+      'amount': '쿠폰 금액',
+      'coupon_name': '쿠폰 명',
+      'quantity': '쿠폰 발급 수량',
+      'expiry_date': '쿠폰 만료 일자',
+      'additional_request': '추가 요청 사항'
+    };
+
+    for (const key in dataMap) {
+      const formFieldName = dataMap[key];
+      const value = data[key];
+      if (value !== null && value !== undefined && String(value).trim() !== '') {
+        const element = form.querySelector(`[name="${formFieldName}"]`);
+        if (element) {
+          element.value = value;
+          // flatpickr 날짜 필드 처리
+          if (element.id === 'couponExpiryDate' && element._flatpickr) {
+            element._flatpickr.setDate(value, true);
+          }
+        }
+      }
+    }
+
+    showMessage('쿠폰 요청 데이터를 성공적으로 불러왔습니다.', 'success');
+  }, 300);
+}
+
+function submitCouponSkip() {
+  const couponId = document.getElementById('couponSkipId').value.trim();
+  if (!couponId) {
+    showMessage('스킵할 쿠폰 요청 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('couponSkipId').value = '';
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .processCouponSkip(couponId);
+}
+
+function submitCouponRejection() {
+  const couponId = document.getElementById('couponRejectionId').value.trim();
+  const reason = document.getElementById('couponRejectionReason').value.trim();
+  if (!couponId) {
+    showMessage('반려할 쿠폰 요청 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('couponRejectionId').value = '';
+        document.getElementById('couponRejectionReason').value = '';
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .processCouponRejection(couponId, reason);
 }
 
 
@@ -1423,7 +1519,7 @@ function openOtherRequestModal() {
 
   fieldOrder.forEach(key => {
     if (currentFormData[key]) {
-        summaryHtml += `<tr><th>${key}</th><td>${currentFormData[key].replace(/\n/g, '<br>')}</td></tr>`;
+        summaryHtml += `<tr><th>${key}</th><td>${formatForModalDisplay(currentFormData[key], false, key)}</td></tr>`;
     }
   });
 
