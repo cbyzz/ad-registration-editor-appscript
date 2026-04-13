@@ -494,7 +494,17 @@ function submitCouponRequest(formData) {
       sheet.appendRow(headers);
       sheet.getRange("1:1").setBackground("#f3f3f3").setFontWeight("bold");
       sheet.setFrozenRows(1);
+    } else {
+      // 기존 시트에 누락된 헤더가 있으면 자동 추가
+      const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const missingHeaders = headers.filter(h => !currentHeaders.includes(h));
+      if (missingHeaders.length > 0) {
+        sheet.getRange(1, currentHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
+        SpreadsheetApp.flush();
+      }
     }
+
+    const finalHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 
     // 1. ID 생성
     const idPrefix = `coupon-${userName}-`;
@@ -509,14 +519,26 @@ function submitCouponRequest(formData) {
     sendCouponNotification(userEmail, uniqueId, subject, formData);
 
     // 4. 시트 저장
-    const newRow = [
-      uniqueId, formattedTimestamp, userEmail, '등록 요청 완료', '', '', '',
-      '', '', 
-      subject,
-      formData['대상 광고 ID'], formData['대상 광고명'],
-      formData['쿠폰 금액'], formData['쿠폰 명'], formData['쿠폰 발급 수량'],
-      formData['쿠폰 만료 일자'], formData['추가 요청 사항']
-    ];
+    const dataMap = {
+      'id': uniqueId,
+      'timestamp': formattedTimestamp,
+      'registrant': userEmail,
+      'status': '등록 요청 완료',
+      'manager': '',
+      'manager_timestamp': '',
+      'completion_timestamp': '',
+      'rejection_timestamp': '',
+      'rejection_reason': '',
+      'subject': subject,
+      'target_ad_id': formData['대상 광고 ID'],
+      'target_ad_name': formData['대상 광고명'],
+      'amount': formData['쿠폰 금액'],
+      'coupon_name': formData['쿠폰 명'],
+      'quantity': formData['쿠폰 발급 수량'],
+      'expiry_date': formData['쿠폰 만료 일자'],
+      'additional_request': formData['추가 요청 사항']
+    };
+    const newRow = finalHeaders.map(header => dataMap[header] || '');
 
     sheet.appendRow(newRow);
 
@@ -1232,11 +1254,12 @@ function submitOtherRequest(formData) {
     
     // 관리 및 데이터 컬럼 정의
     const headers = [
-      'id', 'timestamp', 'registrant', 'status', 'manager', 'manager_timestamp', 'completion_timestamp', // 시스템 관리용
-      'request_type', 'advertiser', 'subject', 'content', // 주요 정보
-      'campaign_name', 'campaign_id', 'priority', 'image_path', // 세부 정보
+      'id', 'timestamp', 'registrant', 'status', 'manager', 'manager_timestamp', 'completion_timestamp',
+      'request_type', 'advertiser', 'subject', 'content',
+      'campaign_name', 'campaign_id', 'priority', 'image_path',
       'popup_start', 'popup_end', 'popup_type', 'popup_group',
-      'banner_start', 'banner_end', 'banner_new_end', 'banner_text', 'banner_type', 'banner_bg_color', 'banner_group'
+      'banner_start', 'banner_end', 'banner_new_end', 'banner_text', 'banner_type', 'banner_bg_color', 'banner_group',
+      'rejection_timestamp', 'rejection_reason' // 제일 오른쪽에 추가
     ];
 
     if (!sheet) {
@@ -1245,7 +1268,13 @@ function submitOtherRequest(formData) {
       sheet.getRange("1:1").setBackground("#f3f3f3").setFontWeight("bold");
       sheet.setFrozenRows(1);
     } else {
-      // 기존 시트가 있다면 헤더 확인 (필요 시 마이그레이션 로직 추가 가능, 여기선 생략)
+      // 기존 시트에 누락된 헤더가 있으면 오른쪽 끝에 자동 추가
+      const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const missingHeaders = headers.filter(h => !currentHeaders.includes(h));
+      if (missingHeaders.length > 0) {
+        sheet.getRange(1, currentHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
+        SpreadsheetApp.flush();
+      }
     }
     
     // 1. ID 생성
@@ -1276,13 +1305,18 @@ function submitOtherRequest(formData) {
     sendOtherRequestNotification(userEmail, uniqueId, subject, formData);
 
     // 4. 시트 저장
-    const newRow = [
-      uniqueId, formattedTimestamp, userEmail, '등록 요청 완료', '', '', '', // 시스템 컬럼 초기값
-      requestType, advertiser, subject, formData['요청사항'],
-      campaignName, formData['캠페인 ID'], formData['우선순위'], formData['이미지 경로'],
-      formData['팝업 노출 시작 일시'], formData['팝업 노출 종료 일시'], formData['팝업 표시 타입'], formData['팝업 그룹'],
-      formData['배너 노출 시작 일시'], formData['배너 노출 종료 일시'], formData['배너 NEW 표시 종료일시'], formData['배너 텍스트'], formData['배너 표시 타입'], formData['배너 배경색상'], formData['배너 그룹']
-    ];
+    const finalHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const dataMap = {
+      'id': uniqueId, 'timestamp': formattedTimestamp, 'registrant': userEmail, 'status': '등록 요청 완료',
+      'manager': '', 'manager_timestamp': '', 'completion_timestamp': '',
+      'request_type': requestType, 'advertiser': advertiser, 'subject': subject, 'content': formData['요청사항'],
+      'campaign_name': campaignName, 'campaign_id': formData['캠페인 ID'], 'priority': formData['우선순위'], 'image_path': formData['이미지 경로'],
+      'popup_start': formData['팝업 노출 시작 일시'], 'popup_end': formData['팝업 노출 종료 일시'], 'popup_type': formData['팝업 표시 타입'], 'popup_group': formData['팝업 그룹'],
+      'banner_start': formData['배너 노출 시작 일시'], 'banner_end': formData['배너 노출 종료 일시'], 'banner_new_end': formData['배너 NEW 표시 종료일시'],
+      'banner_text': formData['배너 텍스트'], 'banner_type': formData['배너 표시 타입'], 'banner_bg_color': formData['배너 배경색상'], 'banner_group': formData['배너 그룹'],
+      'rejection_timestamp': '', 'rejection_reason': ''
+    };
+    const newRow = finalHeaders.map(header => dataMap[header] || '');
 
     sheet.appendRow(newRow);
 
@@ -2355,13 +2389,14 @@ function processCouponSkip(couponId) {
 
     sheet.getRange(rowIndex, statusColIndex + 1).setValue('스킵처리');
 
-    const registrantEmail = rowData[registrantColIndex];
-    const savedSubject = rowData[subjectColIndex] || couponId;
+     const registrantEmail = rowData[registrantColIndex];
 
     const emailBody = `<p>안녕하세요,</p><p>요청하신 <b>쿠폰 요청 ID: ${couponId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`;
 
+    const savedSubject = (subjectColIndex > -1) ? rowData[subjectColIndex] : '';
     try {
-      const threads = GmailApp.search(`"${couponId}"`, 0, 1);
+      const searchQuery = savedSubject ? `subject:"${savedSubject}"` : `"${couponId}"`;
+      const threads = GmailApp.search(searchQuery, 0, 1);
       if (threads && threads.length > 0) {
         threads[0].replyAll("", { htmlBody: emailBody });
       } else if (registrantEmail) {
@@ -2410,9 +2445,11 @@ function processCouponRejection(couponId, reason) {
     if (rejectionTimeColIndex > -1) sheet.getRange(rowIndex, rejectionTimeColIndex + 1).setValue(timestamp);
 
     const registrantEmail = rowData[registrantColIndex];
+    const subjectColIndex = headers.indexOf('subject');
+    const savedSubject = (subjectColIndex > -1) ? rowData[subjectColIndex] : '';
 
     if (registrantEmail) {
-      const subject = `[광고 등록 시스템] 쿠폰 요청(ID: ${couponId})이 반려되었습니다.`;
+      const fallbackSubject = `[광고 등록 시스템] 쿠폰 요청(ID: ${couponId})이 반려되었습니다.`;
       let emailBody = `<p>안녕하세요, ${registrantEmail.split('@')[0]}님.</p>
                        <p>요청하신 쿠폰(ID: <b>${couponId}</b>)이 아래 사유로 반려되었습니다.</p>`;
       if (reason) {
@@ -2420,17 +2457,19 @@ function processCouponRejection(couponId, reason) {
       }
       emailBody += `<p style="margin-top:20px;">수정 후 재요청하시거나 담당자(${rejectorEmail})에게 문의해주세요.</p>
                     <p><a href="${SYSTEM_URL}">시스템 바로가기</a></p>`;
-
       try {
-        const threads = GmailApp.search(`"${couponId}"`, 0, 1);
+        // 저장된 제목으로 원본 스레드 검색
+        const searchQuery = savedSubject ? `subject:"${savedSubject}"` : `"${couponId}"`;
+        const threads = GmailApp.search(searchQuery, 0, 1);
         if (threads && threads.length > 0) {
           threads[0].replyAll('', { htmlBody: emailBody, cc: registrantEmail });
         } else {
-          GmailApp.sendEmail(registrantEmail, subject, '', { htmlBody: emailBody });
+          console.warn(`쿠폰 반려: 스레드 찾기 실패(${couponId}). 새 메일 발송.`);
+          GmailApp.sendEmail(registrantEmail, fallbackSubject, '', { htmlBody: emailBody });
         }
       } catch (e) {
         console.error(`쿠폰 반려 메일 발송 실패: ${e.toString()}`);
-        GmailApp.sendEmail(registrantEmail, subject, '', { htmlBody: emailBody });
+        GmailApp.sendEmail(registrantEmail, fallbackSubject, '', { htmlBody: emailBody });
       }
     }
 
@@ -2444,6 +2483,145 @@ function processCouponRejection(couponId, reason) {
     return { success: true, message: `쿠폰 요청 ID(${couponId})가 성공적으로 반려 처리되었습니다.` };
   } catch (e) {
     console.error(`processCouponRejection Error: ${e.toString()}`);
+    return { success: false, message: '반려 처리 중 오류가 발생했습니다: ' + e.toString() };
+  }
+}
+
+
+/**
+ * 기타 요청 ID를 기반으로 데이터를 객체로 가져옵니다.
+ */
+function getOtherDataById(otherId) {
+  const found = findOtherRowById(otherId);
+  if (found) {
+    const data = {};
+    found.headers.forEach((header, index) => {
+      let value = found.rowData[index];
+      if (value instanceof Date) {
+        try {
+          value = Utilities.formatDate(value, "Asia/Seoul", "yyyy-MM-dd HH:mm");
+        } catch(e) {
+          value = '날짜 형식 오류';
+        }
+      }
+      data[header] = value;
+    });
+    return data;
+  }
+  return null;
+}
+
+/**
+ * 기타 요청을 스킵 처리합니다.
+ */
+function processOtherSkip(otherId) {
+  try {
+    const skipperEmail = Session.getActiveUser().getEmail();
+    const found = findOtherRowById(otherId);
+    if (!found) {
+      return { success: false, message: `기타 요청 ID(${otherId})를 찾을 수 없습니다.` };
+    }
+
+    const { sheet, rowIndex, headers, rowData } = found;
+    const statusColIndex = headers.indexOf('status');
+    const registrantColIndex = headers.indexOf('registrant');
+    const subjectColIndex = headers.indexOf('subject');
+
+    sheet.getRange(rowIndex, statusColIndex + 1).setValue('스킵처리');
+
+    const registrantEmail = rowData[registrantColIndex];
+    const savedSubject = (subjectColIndex > -1) ? rowData[subjectColIndex] : '';
+
+    const emailBody = `<p>안녕하세요,</p><p>요청하신 <b>기타 요청 ID: ${otherId}</b> 건이 <b>스킵 처리</b>되었음을 알려드립니다.</p><p>감사합니다.</p><p>- 처리자: ${skipperEmail}</p>`;
+
+    try {
+      const searchQuery = savedSubject ? `subject:"${savedSubject}"` : `"${otherId}"`;
+      const threads = GmailApp.search(searchQuery, 0, 1);
+      if (threads && threads.length > 0) {
+        threads[0].replyAll("", { htmlBody: emailBody });
+      } else if (registrantEmail) {
+        GmailApp.sendEmail(registrantEmail, `[광고 등록 시스템] 기타 요청(ID: ${otherId})이 스킵 처리되었습니다.`, '', { htmlBody: emailBody });
+      }
+    } catch (e) {
+      console.error(`기타 요청 스킵 알림 메일 발송 실패(ID: ${otherId}): ${e.toString()}`);
+    }
+
+    try {
+      UrlFetchApp.fetch(SLACK_WEBHOOK_URL, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ 'text': `[기타 요청 스킵] (ID: ${otherId})` }) });
+    } catch (e) {
+      console.error(`기타 요청 스킵 슬랙 발송 실패: ${e.toString()}`);
+    }
+
+    logUserAction(skipperEmail, '기타 요청 스킵', { targetId: otherId });
+    return { success: true, message: `기타 요청 ID(${otherId})가 성공적으로 스킵 처리되었습니다.` };
+  } catch (e) {
+    console.error(`processOtherSkip Error: ${e.toString()}`);
+    return { success: false, message: '스킵 처리 중 오류가 발생했습니다: ' + e.toString() };
+  }
+}
+
+/**
+ * 기타 요청을 반려 처리합니다.
+ */
+function processOtherRejection(otherId, reason) {
+  try {
+    const rejectorEmail = Session.getActiveUser().getEmail();
+    const found = findOtherRowById(otherId);
+    if (!found) {
+      return { success: false, message: `기타 요청 ID(${otherId})를 찾을 수 없습니다.` };
+    }
+
+    const { sheet, rowIndex, headers, rowData } = found;
+    const statusColIndex = headers.indexOf('status');
+    const registrantColIndex = headers.indexOf('registrant');
+    const subjectColIndex = headers.indexOf('subject');
+
+    const timestamp = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+    sheet.getRange(rowIndex, statusColIndex + 1).setValue('반려');
+
+    const rejectionReasonColIndex = headers.indexOf('rejection_reason');
+    const rejectionTimeColIndex = headers.indexOf('rejection_timestamp');
+    if (rejectionReasonColIndex > -1) sheet.getRange(rowIndex, rejectionReasonColIndex + 1).setValue(reason);
+    if (rejectionTimeColIndex > -1) sheet.getRange(rowIndex, rejectionTimeColIndex + 1).setValue(timestamp);
+
+    const registrantEmail = rowData[registrantColIndex];
+    const savedSubject = (subjectColIndex > -1) ? rowData[subjectColIndex] : '';
+
+    if (registrantEmail) {
+      const fallbackSubject = `[광고 등록 시스템] 기타 요청(ID: ${otherId})이 반려되었습니다.`;
+      let emailBody = `<p>안녕하세요, ${registrantEmail.split('@')[0]}님.</p>
+                       <p>요청하신 기타 요청(ID: <b>${otherId}</b>)이 아래 사유로 반려되었습니다.</p>`;
+      if (reason) {
+        emailBody += `<div style="padding: 12px; border: 1px solid #ddd; background-color: #f9f9f9; margin-top: 10px;">${reason.replace(/\n/g, '<br>')}</div>`;
+      }
+      emailBody += `<p style="margin-top:20px;">수정 후 재요청하시거나 담당자(${rejectorEmail})에게 문의해주세요.</p>
+                    <p><a href="${SYSTEM_URL}">시스템 바로가기</a></p>`;
+
+      try {
+        const searchQuery = savedSubject ? `subject:"${savedSubject}"` : `"${otherId}"`;
+        const threads = GmailApp.search(searchQuery, 0, 1);
+        if (threads && threads.length > 0) {
+          threads[0].replyAll('', { htmlBody: emailBody, cc: registrantEmail });
+        } else {
+          console.warn(`기타 요청 반려: 스레드 찾기 실패(${otherId}). 새 메일 발송.`);
+          GmailApp.sendEmail(registrantEmail, fallbackSubject, '', { htmlBody: emailBody });
+        }
+      } catch (e) {
+        console.error(`기타 요청 반려 메일 발송 실패: ${e.toString()}`);
+        GmailApp.sendEmail(registrantEmail, fallbackSubject, '', { htmlBody: emailBody });
+      }
+    }
+
+    try {
+      UrlFetchApp.fetch(SLACK_WEBHOOK_URL, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ 'text': `[기타 요청 반려] (ID: ${otherId})` }) });
+    } catch (e) {
+      console.error(`기타 요청 반려 슬랙 발송 실패: ${e.toString()}`);
+    }
+
+    logUserAction(rejectorEmail, '기타 요청 반려', { targetId: otherId, message: `사유: ${reason}` });
+    return { success: true, message: `기타 요청 ID(${otherId})가 성공적으로 반려 처리되었습니다.` };
+  } catch (e) {
+    console.error(`processOtherRejection Error: ${e.toString()}`);
     return { success: false, message: '반려 처리 중 오류가 발생했습니다: ' + e.toString() };
   }
 }

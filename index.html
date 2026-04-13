@@ -233,7 +233,13 @@
         <button onclick="showSection('couponSkipSection')" style="background-color: #ffc107; color: black;">쿠폰 발급 요청 스킵</button>
         <button onclick="showSection('couponRejectionSection')" style="background-color: #dc3545;">쿠폰 발급 요청 반려</button>
       </div>
-      <button onclick="showSection('otherRequestSection')" style="background-color: #20c997;">기타 요청</button>
+      <button onclick="toggleSubmenu('otherSubmenu')" style="background-color: #20c997;">기타 요청</button>
+      <div id="otherSubmenu" class="submenu">
+        <button onclick="showSection('otherRequestSection')">기타 요청</button>
+        <button onclick="showSection('otherLoadSection')">기타 요청 불러오기</button>
+        <button onclick="showSection('otherSkipSection')" style="background-color: #ffc107; color: black;">기타 요청 스킵</button>
+        <button onclick="showSection('otherRejectionSection')" style="background-color: #dc3545;">기타 요청 반려</button>
+      </div>
 
       <button onclick="toggleSubmenu('dspSubmenu')">DSP</button>
        <div id="dspSubmenu" class="submenu" style="width: 250px;">
@@ -541,6 +547,37 @@
           </div>
           <div id="otherRequestSubformContainer"></div>
         </form>
+    </div>
+
+    <div id="otherLoadSection" class="form-section">
+      <h2>기타 요청 불러오기</h2>
+      <div class="form-group">
+        <label>불러올 기타 요청 ID</label>
+        <input type="text" id="loadOtherId" placeholder="예: other-이름-1">
+      </div>
+      <button class="submit-btn" onclick="loadOtherData()">데이터 불러오기</button>
+    </div>
+
+    <div id="otherSkipSection" class="form-section">
+      <h2>기타 요청 스킵 처리</h2>
+      <div class="form-group">
+        <label>스킵할 기타 요청 ID</label>
+        <input type="text" id="otherSkipId" placeholder="예: other-이름-1">
+      </div>
+      <button class="submit-btn" onclick="submitOtherSkip()" style="background-color: #ffc107; color: black;">스킵 요청</button>
+    </div>
+
+    <div id="otherRejectionSection" class="form-section">
+      <h2>기타 요청 반려 처리</h2>
+      <div class="form-group">
+        <label class="required">반려할 기타 요청 ID</label>
+        <input type="text" id="otherRejectionId" placeholder="예: other-이름-1">
+      </div>
+      <div class="form-group">
+        <label>반려 사유 (선택)</label>
+        <textarea id="otherRejectionReason" placeholder="요청자에게 발송될 메일에 포함됩니다." style="min-height: 100px;"></textarea>
+      </div>
+      <button class="submit-btn" onclick="submitOtherRejection()" style="background-color: #dc3545;">반려 완료</button>
     </div>
 
 

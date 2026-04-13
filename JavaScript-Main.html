@@ -218,6 +218,10 @@ if (sectionId.startsWith('cashslide')) {
     document.getElementById('otherRequestForm').reset();
   }
 
+  if (sectionId === 'otherLoadSection') {
+    document.getElementById('loadOtherId').value = '';
+  }
+
   if (sectionId === 'cxRequestSection') {
     buildCxRequestForm();
     const form = document.getElementById('cxRequestForm');

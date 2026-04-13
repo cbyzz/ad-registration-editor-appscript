@@ -1505,6 +1505,15 @@ function openOtherRequestModal() {
       }
   });
 
+  // 무제한 체크된 날짜 필드 처리
+  const unlimitedDateFields = ['배너 노출 종료 일시', '팝업 노출 종료 일시'];
+  unlimitedDateFields.forEach(fieldName => {
+      const input = form.querySelector(`[name="${fieldName}"]`);
+      if (input && input.disabled && input.value === '무제한') {
+          currentFormData[fieldName] = '무제한';
+      }
+  });
+
   const requestType = currentFormData['선택항목'];
 
   if (requestType === '팝업요청') {
@@ -1588,6 +1597,149 @@ function submitOtherRequest() {
     })
     .withFailureHandler(handleError)
     .submitOtherRequest(currentFormData);
+}
+
+
+function loadOtherData() {
+  const otherId = document.getElementById('loadOtherId').value.trim();
+  if (!otherId) {
+    showMessage('불러올 기타 요청 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      setLoading(false);
+      if (data) {
+        populateOtherFormWithData(data);
+      } else {
+        showMessage(`기타 요청 ID '${otherId}'를 찾을 수 없습니다.`, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .getOtherDataById(otherId);
+}
+
+function populateOtherFormWithData(data) {
+  showSection('otherRequestSection');
+
+  setTimeout(() => {
+    const form = document.getElementById('otherRequestForm');
+    form.reset();
+    document.getElementById('otherRequestSubformContainer').innerHTML = '';
+
+    // 기본 필드 채우기
+    const basicMap = {
+      'advertiser': '광고주명',
+      'content': '요청사항'
+    };
+
+    for (const key in basicMap) {
+      const formFieldName = basicMap[key];
+      const value = data[key];
+      if (value !== null && value !== undefined && String(value).trim() !== '') {
+        const element = form.querySelector(`[name="${formFieldName}"]`);
+        if (element) element.value = value;
+      }
+    }
+
+    // 선택항목 처리 (하위 폼 생성 트리거)
+    const requestType = data['request_type'];
+    if (requestType) {
+      const selectElement = form.querySelector('[name="선택항목"]');
+      if (selectElement) {
+        selectElement.value = requestType;
+        selectElement.dispatchEvent(new Event('change'));
+
+        // 하위 폼이 그려진 후 데이터 채우기
+        setTimeout(() => {
+          const subFieldMap = {
+            'campaign_name': '캠페인명',
+            'campaign_id': '캠페인 ID',
+            'priority': '우선순위',
+            'image_path': '이미지 경로',
+            'popup_start': '팝업 노출 시작 일시',
+            'popup_end': '팝업 노출 종료 일시',
+            'popup_type': '팝업 표시 타입',
+            'banner_start': '배너 노출 시작 일시',
+            'banner_end': '배너 노출 종료 일시',
+            'banner_new_end': '배너 NEW 표시 종료일시',
+            'banner_text': '배너 텍스트',
+            'banner_type': '배너 표시 타입',
+            'banner_bg_color': '배너 배경색상'
+          };
+
+          for (const key in subFieldMap) {
+            const formFieldName = subFieldMap[key];
+            const value = data[key];
+            if (value !== null && value !== undefined && String(value).trim() !== '') {
+              const element = form.querySelector(`[name="${formFieldName}"]`);
+              if (element) {
+                if (element._flatpickr) {
+                  element._flatpickr.setDate(value, true);
+                } else {
+                  element.value = value;
+                }
+                if (element.tagName === 'SELECT') {
+                  element.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              }
+            }
+          }
+
+          showMessage('기타 요청 데이터를 성공적으로 불러왔습니다.', 'success');
+        }, 500);
+      }
+    } else {
+      showMessage('기타 요청 데이터를 성공적으로 불러왔습니다.', 'success');
+    }
+  }, 300);
+}
+
+function submitOtherSkip() {
+  const otherId = document.getElementById('otherSkipId').value.trim();
+  if (!otherId) {
+    showMessage('스킵할 기타 요청 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('otherSkipId').value = '';
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .processOtherSkip(otherId);
+}
+
+function submitOtherRejection() {
+  const otherId = document.getElementById('otherRejectionId').value.trim();
+  const reason = document.getElementById('otherRejectionReason').value.trim();
+  if (!otherId) {
+    showMessage('반려할 기타 요청 ID를 입력해주세요.', 'error');
+    return;
+  }
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(function(response) {
+      setLoading(false);
+      if (response.success) {
+        showMessage(response.message, 'success');
+        alert(response.message);
+        document.getElementById('otherRejectionId').value = '';
+        document.getElementById('otherRejectionReason').value = '';
+      } else {
+        showMessage(response.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .processOtherRejection(otherId, reason);
 }
 
 
