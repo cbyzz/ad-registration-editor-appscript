@@ -20,6 +20,28 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+function postSlackWithRetry(payload, maxRetry) {
+  const retries = maxRetry || 3;
+  let lastError = null;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = UrlFetchApp.fetch(SLACK_WEBHOOK_URL, {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      });
+      const code = res.getResponseCode();
+      if (code < 300) return true;
+      lastError = new Error(`Slack HTTP ${code}: ${res.getContentText()}`);
+    } catch (e) {
+      lastError = e;
+    }
+    if (i < retries - 1) Utilities.sleep(1000 * Math.pow(2, i));
+  }
+  throw lastError;
+}
+
 function getSheetByGid(spreadsheet, gid) {
   const sheets = spreadsheet.getSheets();
   for (let i = 0; i < sheets.length; i++) {
@@ -450,11 +472,18 @@ function submitModificationShare(formData) {
     GmailApp.sendEmail(ADMIN_EMAIL, subject, '', { htmlBody: body, cc: ccEmails }); // cc 옵션 추가
     
     try {
-      const slackMessage = { 'text': `${subject}` };
-      const options = { 'method': 'post', 'contentType': 'application/json', 'payload': JSON.stringify(slackMessage) };
-      UrlFetchApp.fetch(SLACK_WEBHOOK_URL, options);
+      postSlackWithRetry({ 'text': `${subject}` });
     } catch (e) {
       console.error(`수정 공유 슬랙 발송 실패 (광고: ${targetAdName}): ${e.toString()}`);
+      try {
+        GmailApp.sendEmail(
+          'choi.byoungyoul@nbt.com',
+          `[수정 공유 슬랙 발송 실패] ${subject}`,
+          `수정 공유 슬랙 발송이 재시도 후에도 실패했습니다.\n\n광고: ${targetAdName}\n에러: ${e.toString()}`
+        );
+      } catch (mailErr) {
+        console.error(`수정 공유 슬랙 실패 알림 메일도 실패: ${mailErr.toString()}`);
+      }
     }
 
     logUserAction(userEmail, '수정 공유', {
@@ -957,12 +986,18 @@ function sendModificationRequestNotification(senderEmail, modId, subject, data) 
   }
 
   try {
-    const slackMessage = { 'text': `${subject}` };
-    const options = { 'method': 'post', 'contentType': 'application/json', 'payload': JSON.stringify(slackMessage) };
-    UrlFetchApp.fetch(SLACK_WEBHOOK_URL, options);
+    postSlackWithRetry({ 'text': `${subject}` });
   } catch (e) {
     console.error(`수정 요청 슬랙 발송 실패 (ID: ${modId}): ${e.toString()}`);
-    // 슬랙 발송이 실패해도 전체 프로세스가 중단되지 않도록 여기서 오류를 잡아줍니다.
+    try {
+      GmailApp.sendEmail(
+        'choi.byoungyoul@nbt.com',
+        `[수정 요청 슬랙 발송 실패] ${subject}`,
+        `수정 요청 슬랙 발송이 재시도 후에도 실패했습니다.\n\nID: ${modId}\n에러: ${e.toString()}`
+      );
+    } catch (mailErr) {
+      console.error(`수정 요청 슬랙 실패 알림 메일도 실패: ${mailErr.toString()}`);
+    }
   }
 
   // ▼▼▼ [핵심 수정] 스레드 ID가 아닌, 스레드에 포함된 첫 번째 메시지의 ID를 저장합니다. ▼▼▼
@@ -1151,11 +1186,19 @@ function processModificationSkip(modId) {
     const subject = String(adName).split('\n')[0];
 
     const slackMessage = { 'text': `[수정 스킵 처리] - ${subject} (ID: ${modId})` };
-    const options = { 'method': 'post', 'contentType': 'application/json', 'payload': JSON.stringify(slackMessage) };
     try {
-      UrlFetchApp.fetch(SLACK_WEBHOOK_URL, options);
+      postSlackWithRetry(slackMessage);
     } catch(e) {
       console.error(`수정 스킵 알림 슬랙 발송 실패 (ID: ${modId}): ${e.toString()}`);
+      try {
+        GmailApp.sendEmail(
+          'choi.byoungyoul@nbt.com',
+          `[수정 스킵 알림 슬랙 발송 실패] ${subject}`,
+          `수정 스킵 알림 슬랙 발송이 재시도 후에도 실패했습니다.\n\nID: ${modId}\n에러: ${e.toString()}`
+        );
+      } catch (mailErr) {
+        console.error(`수정 스킵 슬랙 실패 알림 메일도 실패: ${mailErr.toString()}`);
+      }
     }
 
     logUserAction(skipperEmail, '수정 스킵 처리', {
@@ -1749,10 +1792,18 @@ let body = `<p>안녕하세요, 운영팀.</p>
   GmailApp.sendEmail(bdRecipients, subject, '', mailOptions);
 
   try {
-    const slackMessage = { 'text': subject };
-    UrlFetchApp.fetch(SLACK_WEBHOOK_URL, { method: 'post', contentType: 'application/json', payload: JSON.stringify(slackMessage) });
+    postSlackWithRetry({ 'text': subject });
   } catch (e) {
     console.error(`BD 슬랙 발송 실패: ${e.toString()}`);
+    try {
+      GmailApp.sendEmail(
+        'choi.byoungyoul@nbt.com',
+        `[BD 슬랙 발송 실패] ${subject}`,
+        `BD 요청 슬랙 발송이 재시도 후에도 실패했습니다.\n\nID: ${id}\n에러: ${e.toString()}`
+      );
+    } catch (mailErr) {
+      console.error(`BD 슬랙 실패 알림 메일도 실패: ${mailErr.toString()}`);
+    }
   }
 }
 

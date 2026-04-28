@@ -683,11 +683,18 @@ function sendDspModificationNotification(senderEmail, modId, subject, data) {
 
   GmailApp.sendEmail(ADMIN_EMAIL, subject, '', { htmlBody: body, cc: ccEmails });
   try {
-    const slackMessage = { 'text': `${subject}` };
-    const options = { 'method': 'post', 'contentType': 'application/json', 'payload': JSON.stringify(slackMessage) };
-    UrlFetchApp.fetch(SLACK_WEBHOOK_URL, options);
+    postSlackWithRetry({ 'text': `${subject}` });
   } catch (e) {
     console.error(`DSP 수정 요청 슬랙 발송 실패 (ID: ${modId}): ${e.toString()}`);
+    try {
+      GmailApp.sendEmail(
+        'choi.byoungyoul@nbt.com',
+        `[DSP 수정 요청 슬랙 발송 실패] ${subject}`,
+        `DSP 수정 요청 슬랙 발송이 재시도 후에도 실패했습니다.\n\nID: ${modId}\n에러: ${e.toString()}`
+      );
+    } catch (mailErr) {
+      console.error(`DSP 수정 요청 슬랙 실패 알림 메일도 실패: ${mailErr.toString()}`);
+    }
   }
 
   Utilities.sleep(2000);
@@ -854,11 +861,18 @@ function processDspModificationSkip(dspModId) {
 
     // 3. 슬랙으로 알림 발송
     try {
-      const slackMessage = { 'text': `[DSP 수정 스킵] ${subject} (ID: ${dspModId})` };
-      const options = { 'method': 'post', 'contentType': 'application/json', 'payload': JSON.stringify(slackMessage) };
-      UrlFetchApp.fetch(SLACK_WEBHOOK_URL, options);
+      postSlackWithRetry({ 'text': `[DSP 수정 스킵] ${subject} (ID: ${dspModId})` });
     } catch (e) {
       console.error(`DSP 수정 스킵 알림 슬랙 발송 실패 (ID: ${dspModId}): ${e.toString()}`);
+      try {
+        GmailApp.sendEmail(
+          'choi.byoungyoul@nbt.com',
+          `[DSP 수정 스킵 슬랙 발송 실패] ${subject}`,
+          `DSP 수정 스킵 슬랙 발송이 재시도 후에도 실패했습니다.\n\nID: ${dspModId}\n에러: ${e.toString()}`
+        );
+      } catch (mailErr) {
+        console.error(`DSP 수정 스킵 슬랙 실패 알림 메일도 실패: ${mailErr.toString()}`);
+      }
     }
 
     // 4. 활동 로그 기록
@@ -962,11 +976,18 @@ function processDspModificationRejection(dspModId, reason) {
 
     // 3. 슬랙 알림 발송
     try {
-      const slackMessage = { 'text': `[DSP 수정 반려] - ${String(adName).split('\n')[0]} (ID: ${dspModId})` };
-      const options = { 'method': 'post', 'contentType': 'application/json', 'payload': JSON.stringify(slackMessage) };
-      UrlFetchApp.fetch(SLACK_WEBHOOK_URL, options);
+      postSlackWithRetry({ 'text': `[DSP 수정 반려] - ${String(adName).split('\n')[0]} (ID: ${dspModId})` });
     } catch (e) {
       console.error(`DSP 수정 반려 슬랙 발송 실패 (ID: ${dspModId}): ${e.toString()}`);
+      try {
+        GmailApp.sendEmail(
+          'choi.byoungyoul@nbt.com',
+          `[DSP 수정 반려 슬랙 발송 실패] ${adName}`,
+          `DSP 수정 반려 슬랙 발송이 재시도 후에도 실패했습니다.\n\nID: ${dspModId}\n에러: ${e.toString()}`
+        );
+      } catch (mailErr) {
+        console.error(`DSP 수정 반려 슬랙 실패 알림 메일도 실패: ${mailErr.toString()}`);
+      }
     }
 
     // 4. 활동 로그 기록

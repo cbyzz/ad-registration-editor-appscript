@@ -1061,9 +1061,18 @@ function sendCashslideModificationNotification(senderEmail, modId, subject, data
 
   GmailApp.sendEmail(ADMIN_EMAIL, subject, '', { htmlBody: body, cc: ccEmails });
   try {
-    UrlFetchApp.fetch(SLACK_WEBHOOK_URL, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ 'text': subject }) });
+    postSlackWithRetry({ 'text': subject });
   } catch (e) {
     console.error(`캐시슬라이드 수정 요청 슬랙 발송 실패 (ID: ${modId}): ${e.toString()}`);
+    try {
+      GmailApp.sendEmail(
+        'choi.byoungyoul@nbt.com',
+        `[캐시슬라이드 수정 요청 슬랙 발송 실패] ${subject}`,
+        `캐시슬라이드 수정 요청 슬랙 발송이 재시도 후에도 실패했습니다.\n\nID: ${modId}\n에러: ${e.toString()}`
+      );
+    } catch (mailErr) {
+      console.error(`캐시슬라이드 수정 요청 슬랙 실패 알림 메일도 실패: ${mailErr.toString()}`);
+    }
   }
 
   Utilities.sleep(2000);
@@ -1259,10 +1268,18 @@ function processCashslideModificationSkip(modId) {
 
     // 3. 슬랙 알림 발송
     try {
-      const slackMessage = { 'text': `[캐시슬라이드 수정 스킵] ${adName} (ID: ${modId})` };
-      UrlFetchApp.fetch(SLACK_WEBHOOK_URL, { method: 'post', contentType: 'application/json', payload: JSON.stringify(slackMessage) });
+      postSlackWithRetry({ 'text': `[캐시슬라이드 수정 스킵] ${adName} (ID: ${modId})` });
     } catch (e) {
       console.error(`캐시슬라이드 수정 스킵 알림 슬랙 발송 실패 (ID: ${modId}): ${e.toString()}`);
+      try {
+        GmailApp.sendEmail(
+          'choi.byoungyoul@nbt.com',
+          `[캐시슬라이드 수정 스킵 슬랙 발송 실패] ${adName}`,
+          `캐시슬라이드 수정 스킵 슬랙 발송이 재시도 후에도 실패했습니다.\n\nID: ${modId}\n에러: ${e.toString()}`
+        );
+      } catch (mailErr) {
+        console.error(`캐시슬라이드 수정 스킵 슬랙 실패 알림 메일도 실패: ${mailErr.toString()}`);
+      }
     }
 
     logUserAction(skipperEmail, '캐시슬라이드 수정 스킵', { targetId: modId });
@@ -1355,10 +1372,18 @@ function processCashslideModificationRejection(modId, reason) {
     }
 
     try {
-      const slackMessage = { 'text': `[캐시슬라이드 수정 반려] ${adName} (ID: ${modId})` };
-      UrlFetchApp.fetch(SLACK_WEBHOOK_URL, { method: 'post', contentType: 'application/json', payload: JSON.stringify(slackMessage) });
+      postSlackWithRetry({ 'text': `[캐시슬라이드 수정 반려] ${adName} (ID: ${modId})` });
     } catch (e) {
       console.error(`캐시슬라이드 수정 반려 슬랙 발송 실패 (ID: ${modId}): ${e.toString()}`);
+      try {
+        GmailApp.sendEmail(
+          'choi.byoungyoul@nbt.com',
+          `[캐시슬라이드 수정 반려 슬랙 발송 실패] ${adName}`,
+          `캐시슬라이드 수정 반려 슬랙 발송이 재시도 후에도 실패했습니다.\n\nID: ${modId}\n에러: ${e.toString()}`
+        );
+      } catch (mailErr) {
+        console.error(`캐시슬라이드 수정 반려 슬랙 실패 알림 메일도 실패: ${mailErr.toString()}`);
+      }
     }
 
     logUserAction(rejectorEmail, '캐시슬라이드 수정 반려', { targetId: modId, message: `사유: ${reason}` });
