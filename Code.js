@@ -20,6 +20,12 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+function htmlMessage(msg) {
+  return HtmlService.createHtmlOutput(
+    `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><h1>${msg}</h1></body></html>`
+  ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
 function postSlackWithRetry(payload, maxRetry) {
   const retries = maxRetry || 3;
   let lastError = null;
@@ -125,7 +131,7 @@ function doGet(e) {
     const adId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordConfirmation(adId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
   if (e && e.parameter && e.parameter.action === 'complete' && e.parameter.id && e.parameter.adId) {
@@ -134,21 +140,21 @@ function doGet(e) {
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processCompletion(registrationId, adId, completerEmail);
     // processCompletion 함수는 객체를 반환하므로, 메시지만 추출하여 사용합니다.
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   if (e && e.parameter && e.parameter.action === 'confirm_mod' && e.parameter.id) {
     const modId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordModificationConfirmation(modId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
   if (e && e.parameter && e.parameter.action === 'confirm_dsp' && e.parameter.id) {
     const dspId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordDspConfirmation(dspId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
   if (e && e.parameter && e.parameter.action === 'complete_dsp' && e.parameter.id && e.parameter.adId) {
@@ -156,7 +162,7 @@ function doGet(e) {
     const adId = e.parameter.adId;
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processDspCompletion(registrationId, adId, completerEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   // '수정 완료' 처리 로직
@@ -164,28 +170,28 @@ function doGet(e) {
     const modId = e.parameter.id;
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processModificationCompletion(modId, completerEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   if (e && e.parameter && e.parameter.action === 'confirm_dsp_mod' && e.parameter.id) {
     const dspModId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordDspModificationConfirmation(dspModId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
   if (e && e.parameter && e.parameter.action === 'complete_dsp_mod' && e.parameter.id) {
     const dspModId = e.parameter.id;
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processDspModificationCompletion(dspModId, completerEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   if (e && e.parameter && e.parameter.action === 'confirm_cs' && e.parameter.id) {
     const csId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordCashslideConfirmation(csId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
   if (e && e.parameter && e.parameter.action === 'complete_cs' && e.parameter.id && e.parameter.adId) {
@@ -193,21 +199,21 @@ function doGet(e) {
     const adId = e.parameter.adId;
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processCashslideCompletion(registrationId, adId, completerEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   if (e && e.parameter && e.parameter.action === 'confirm_cs_mod' && e.parameter.id) {
     const csModId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordCashslideModificationConfirmation(csModId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
   if (e && e.parameter && e.parameter.action === 'complete_cs_mod' && e.parameter.id) {
     const csModId = e.parameter.id;
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processCashslideModificationCompletion(csModId, completerEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
 
@@ -215,7 +221,7 @@ function doGet(e) {
     const cxId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordCxConfirmation(cxId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
   // ▼▼▼ [추가] CX팀 완료 처리 ▼▼▼
@@ -223,14 +229,14 @@ function doGet(e) {
     const cxId = e.parameter.id;
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processCxCompletion(cxId, completerEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   if (e && e.parameter && e.parameter.action === 'confirm_bd' && e.parameter.id) {
     const bdId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordBdConfirmation(bdId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
   // ▼▼▼ [추가] 오퍼월사업팀 완료 처리 ▼▼▼
@@ -238,28 +244,28 @@ function doGet(e) {
     const bdId = e.parameter.id;
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processBdCompletion(bdId, completerEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   if (e && e.parameter && e.parameter.action === 'confirm_other' && e.parameter.id) {
     const otherId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordOtherConfirmation(otherId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
   if (e && e.parameter && e.parameter.action === 'complete_other' && e.parameter.id) {
     const otherId = e.parameter.id;
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processOtherCompletion(otherId, completerEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   if (e && e.parameter && e.parameter.action === 'complete_other' && e.parameter.id) {
     const otherId = e.parameter.id;
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processOtherCompletion(otherId, completerEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   // ▼▼▼ [추가] 쿠폰 발급 요청 담당하기 및 완료 처리 ▼▼▼
@@ -267,21 +273,21 @@ function doGet(e) {
     const couponId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordCouponConfirmation(couponId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
   if (e && e.parameter && e.parameter.action === 'complete_coupon' && e.parameter.id) {
     const couponId = e.parameter.id;
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processCouponCompletion(couponId, completerEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   if (e && e.parameter && e.parameter.action === 'confirm_copy' && e.parameter.id) {
     const copyId = e.parameter.id;
     const approverEmail = Session.getActiveUser().getEmail();
     const resultMessage = recordCopyCreationConfirmation(copyId, approverEmail);
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage}</h1>`);
+    return htmlMessage(resultMessage);
   }
 
 if (e && e.parameter && e.parameter.action === 'complete_copy' && e.parameter.id && e.parameter.adId) {
@@ -289,13 +295,15 @@ if (e && e.parameter && e.parameter.action === 'complete_copy' && e.parameter.id
     const adId = e.parameter.adId; // 광고 ID 추출
     const completerEmail = Session.getActiveUser().getEmail();
     const resultMessage = processCopyCreationCompletion(copyId, completerEmail, adId); // adId 전달
-    return HtmlService.createHtmlOutput(`<h1>${resultMessage.message}</h1>`);
+    return htmlMessage(resultMessage.message);
   }
 
   // 기본 웹앱 로드 로직 (기존과 동일)
   const userEmail = Session.getActiveUser().getEmail();
   if (!isAuthorizedUser(userEmail)) {
-    return HtmlService.createHtmlOutput(`<h1>접근 권한이 없습니다.</h1><p>관리자에게 문의하세요. (${userEmail})</p>`);
+    return HtmlService.createHtmlOutput(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><h1>접근 권한이 없습니다.</h1><p>관리자에게 문의하세요. (${userEmail})</p></body></html>`
+    );
   }
   const html = HtmlService.createTemplateFromFile('index').evaluate();
   html.setTitle('광고 등록 요청 시스템');
@@ -303,15 +311,25 @@ if (e && e.parameter && e.parameter.action === 'complete_copy' && e.parameter.id
 }
 
 function isAuthorizedUser(email) {
-  if (!email.endsWith('@nbt.com')) {
+  if (!email) return false;
+  const normalized = String(email).trim().toLowerCase();
+  if (!normalized.endsWith('@nbt.com')) {
     return false;
   }
   const userSheet = ss.getSheetByName('사용자');
-  if (!userSheet) { 
+  if (!userSheet) {
     return false;
   }
-  const userList = userSheet.getRange('A2:A' + userSheet.getLastRow()).getValues().flat();
-  return userList.includes(email);
+  const userList = userSheet.getRange('A2:A' + userSheet.getLastRow())
+    .getValues()
+    .flat()
+    .map(v => String(v).trim().toLowerCase())
+    .filter(v => v);
+  const ok = userList.includes(normalized);
+  if (!ok) {
+    console.log(`isAuthorizedUser denied. input="${email}" normalized="${normalized}" listLen=${userList.length}`);
+  }
+  return ok;
 }
 
 function getUserEmail() {
